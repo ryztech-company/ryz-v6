@@ -1,0 +1,4390 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RYZ MUSICAL</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Roboto+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi@2.0.28/build/Midi.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+    <style>
+        :root {
+            --module-width: 1200px;
+            --led-bg: #000;
+            --led-text: #fff;
+            --metallic-light: #f3f4f6;
+            --metallic-mid: #9ca3af;
+            --metallic-dark: #374151;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial Black', Impact, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+        }
+
+        html {
+            overflow: hidden;
+            overscroll-behavior: none;
+        }
+
+        body {
+            background-color: #000;
+            overflow: hidden;
+            overscroll-behavior: none;
+            touch-action: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 20px;
+        }
+
+        .module {
+            --u: 1cqw;
+            --knob-size: min(calc(11.5 * var(--u)), 10cqw);
+            width: min(100%, var(--module-width), calc((100vh - 40px) * 16 / 9));
+            width: min(100%, var(--module-width), calc((100dvh - 40px) * 16 / 9));
+            aspect-ratio: 16 / 9;
+            container-type: inline-size;
+            background-color: #1a0600;
+            border: 12px solid #000;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            box-shadow:
+                0 20px 50px rgba(0, 0, 0, 0.9),
+                inset 0 0 20px rgba(255, 255, 255, 0.2),
+                inset 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        @media (orientation: landscape) {
+            body {
+                padding: 0;
+                min-height: 0;
+                height: 100vh;
+                height: 100dvh;
+                overflow: hidden;
+            }
+
+            .module {
+                --u: min(1cqw, calc(1cqh * 16 / 9));
+                width: 100vw;
+                height: 100vh;
+                height: 100dvh;
+                max-width: none;
+                aspect-ratio: auto;
+                container-type: size;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+        }
+
+        .bg-stage {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            overflow: hidden;
+            background-color: #0a0a0a;
+        }
+
+        .bg-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            background-image: url("https://raw.githubusercontent.com/pi-pop/bg/main/bg.jpg");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            opacity: 0;
+            transition: opacity 700ms ease;
+            will-change: opacity;
+        }
+
+        .bg-layer.top {
+            z-index: 2;
+        }
+
+        .bg-layer.show {
+            opacity: 1;
+        }
+
+        .bg-vignette {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            background: radial-gradient(ellipse at 50% 45%, transparent 60%, rgba(0, 0, 0, 0.4) 100%);
+        }
+
+        .led-screen {
+            position: absolute;
+            top: 0.3%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(39.1 * var(--u));
+            aspect-ratio: 282 / 243;
+            container-type: inline-size;
+            --p: calc(100cqw / 282);
+            background: #000;
+            border-radius: calc(0.5 * var(--u));
+            z-index: 29;
+            overflow: hidden;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.7);
+        }
+
+        .led-screen, .led-screen * {
+            font-family: 'Roboto Mono', ui-monospace, Menlo, Consolas, 'Courier New', monospace;
+        }
+
+        .lcd-frame, .led-track, .led-grid, .lcd-sep, .lcd-btn, .lcd-card {
+            position: absolute;
+            box-sizing: border-box;
+            border: calc(2 * var(--p)) solid #f3f3f3;
+        }
+
+        .lcd-frame {
+            left: calc(8.5 * var(--p)); top: calc(6 * var(--p));
+            width: calc(265 * var(--p)); height: calc(231 * var(--p));
+            border-radius: calc(22 * var(--p));
+        }
+
+        .led-track {
+            left: calc(14.5 * var(--p)); top: calc(12 * var(--p));
+            width: calc(253 * var(--p)); height: calc(53 * var(--p));
+            border-radius: calc(26.5 * var(--p));
+            background: #000;
+            cursor: pointer;
+            text-align: center;
+            font-size: calc(29 * var(--p));
+            font-weight: 600;
+            line-height: calc(49 * var(--p));
+            color: #eaf53a;
+            padding: 0 calc(13 * var(--p)) 0 calc(3 * var(--p));
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .led-title {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            will-change: transform;
+        }
+
+        .led-title.moving {
+            display: inline-block;
+            overflow: visible;
+            text-overflow: clip;
+        }
+
+        .led-grid {
+            left: calc(14.5 * var(--p)); top: calc(69 * var(--p));
+            width: calc(253 * var(--p)); height: calc(32.5 * var(--p));
+            border-radius: calc(16.25 * var(--p));
+            background: #000;
+            overflow: hidden;
+        }
+
+        .lcd-ind {
+            position: absolute;
+            left: calc(25.5 * var(--p)); top: 50%;
+            width: calc(15 * var(--p)); height: calc(15 * var(--p));
+            margin-top: calc(-7.5 * var(--p));
+            background: #ee4a27;
+        }
+
+        .lcd-ind.playing {
+            background: #2fe05a;
+            clip-path: polygon(0 0, 100% 50%, 0 100%);
+        }
+
+        .lcd-time {
+            position: absolute;
+            left: calc(49 * var(--p)); top: 0;
+            font-size: calc(29 * var(--p));
+            font-weight: 600;
+            line-height: calc(28.5 * var(--p));
+            color: #fff;
+            white-space: nowrap;
+        }
+
+        .led-bars {
+            position: absolute;
+            left: calc(146 * var(--p)); right: calc(16 * var(--p)); bottom: calc(2 * var(--p));
+            height: calc(22 * var(--p));
+            display: flex;
+            align-items: flex-end;
+            gap: calc(0.3 * var(--p));
+        }
+
+        .led-bar {
+            flex: 1;
+            height: 100%;
+            background: #fff;
+            transform-origin: bottom;
+            transform: scaleY(0.07);
+            will-change: transform;
+        }
+
+        .lcd-sep {
+            left: calc(14.5 * var(--p)); top: calc(105.5 * var(--p));
+            width: calc(253 * var(--p)); height: calc(11.5 * var(--p));
+            border-radius: calc(5.75 * var(--p));
+            overflow: hidden;
+        }
+
+        .lcd-prog {
+            height: 100%;
+            width: 0;
+            background: #ee2a2a;
+        }
+
+        .lcd-btn {
+            top: calc(121 * var(--p));
+            height: calc(34 * var(--p));
+            border-radius: calc(17 * var(--p));
+            text-align: center;
+            font-size: calc(20 * var(--p));
+            font-weight: 700;
+            line-height: calc(30 * var(--p));
+            color: #fff;
+            white-space: nowrap;
+        }
+
+        .lcd-btn.bt { left: calc(14.5 * var(--p)); width: calc(124.5 * var(--p)); background: #1a9fe6; }
+        .lcd-btn.stop { left: calc(143 * var(--p)); width: calc(124.5 * var(--p)); background: #f04b25; }
+        .lcd-btn.stop.playing { background: #1fbf55; }
+
+        .lcd-card {
+            height: calc(34 * var(--p));
+            border-radius: calc(17 * var(--p));
+            overflow: hidden;
+            background: linear-gradient(to bottom, #19a1e9 0, #19a1e9 42%, #0a4d89 47%, #041a33 54%, #000 62%, #000 100%);
+        }
+
+        .lcd-card.r1 { top: calc(159 * var(--p)); }
+        .lcd-card.r2 { top: calc(197 * var(--p)); }
+        .lcd-card.c1 { left: calc(14.5 * var(--p)); width: calc(124.5 * var(--p)); }
+        .lcd-card.c2 { left: calc(143 * var(--p)); width: calc(124.5 * var(--p)); }
+
+        .lcd-lbl {
+            position: absolute;
+            top: calc(1 * var(--p)); left: 0; right: 0;
+            text-align: center;
+            font-size: calc(8.5 * var(--p));
+            font-weight: 600;
+            line-height: calc(10 * var(--p));
+            color: #fff;
+        }
+
+        .lcd-val {
+            position: absolute;
+            top: calc(9.5 * var(--p)); left: 0; right: 0;
+            text-align: center;
+            font-size: calc(18 * var(--p));
+            font-weight: 700;
+            line-height: calc(21 * var(--p));
+            color: #fff;
+            white-space: nowrap;
+        }
+
+        .lcd-card.r0 { top: calc(121 * var(--p)); }
+
+        .lcd-plist { display: none; }
+        .led-screen.mode-plist .lcd-plist { display: block; }
+        .led-screen.mode-plist .lcd-n { display: none; }
+
+        .lcd-prows {
+            position: absolute;
+            left: calc(14.5 * var(--p)); top: calc(69 * var(--p));
+            width: calc(253 * var(--p)); height: calc(136.5 * var(--p));
+            overflow: hidden;
+            touch-action: none;
+            cursor: grab;
+        }
+
+        .lcd-prow {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: calc(19.5 * var(--p));
+            line-height: calc(19.5 * var(--p));
+            padding: 0 calc(8 * var(--p));
+            border-radius: calc(3 * var(--p));
+            font-size: calc(14 * var(--p));
+            font-weight: 600;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            will-change: transform;
+        }
+
+        .lcd-pthumb {
+            position: absolute;
+            right: calc(1.5 * var(--p));
+            top: 0;
+            width: calc(3 * var(--p));
+            border-radius: calc(1.5 * var(--p));
+            background: rgba(255, 255, 255, 0.6);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 300ms ease;
+            z-index: 2;
+        }
+
+        .lcd-pthumb.show {
+            opacity: 1;
+        }
+
+        .lcd-prow.sel { background: #1a9fe6; }
+        .lcd-prow .arr { color: #eaf53a; font-weight: 700; }
+
+        .lcd-pnum {
+            position: absolute;
+            left: calc(14.5 * var(--p)); top: calc(210 * var(--p));
+            width: calc(253 * var(--p)); height: calc(21 * var(--p));
+            box-sizing: border-box;
+            border-radius: calc(10.5 * var(--p));
+            background: #eaf53a;
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 calc(12 * var(--p));
+            font-size: calc(14 * var(--p));
+            font-weight: 700;
+        }
+
+        .lcd-pempty {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: calc(14 * var(--p));
+            font-weight: 600;
+            color: rgba(210, 210, 215, 0.55);
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        .lcd-val.long { font-size: calc(15 * var(--p)); }
+        .lcd-val.small { font-size: calc(10 * var(--p)); font-weight: 500; }
+        .lcd-val.on { color: #22f024; }
+        .lcd-val.off { color: #ff2d1c; }
+
+        .lcd-confirm {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.62);
+        }
+
+        .lcd-confirm.open {
+            display: flex;
+            animation: dlg-fade 180ms ease-out;
+        }
+
+        .lcd-dialog {
+            overflow: hidden;
+            width: calc(232 * var(--p));
+            padding: calc(14 * var(--p)) calc(12 * var(--p)) calc(12 * var(--p));
+            border: calc(2 * var(--p)) solid #f3f3f3;
+            border-radius: calc(20 * var(--p));
+            background: linear-gradient(to bottom, #15151d 0%, #05050a 100%);
+            box-shadow:
+                0 calc(8 * var(--p)) calc(22 * var(--p)) rgba(0, 0, 0, 0.9),
+                0 0 calc(14 * var(--p)) rgba(234, 245, 58, 0.22);
+            text-align: center;
+            animation: dlg-pop 300ms var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+        }
+
+        .lcd-dlg-msg {
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 4;
+            overflow: hidden;
+            color: #eaf53a;
+            font-size: calc(15 * var(--p));
+            font-weight: 700;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+
+        .lcd-dlg-row {
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            gap: calc(10 * var(--p));
+            margin: calc(12 * var(--p)) calc(2 * var(--p)) 0;
+        }
+
+        .lcd-dlg-slider {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: calc((100% - 10 * var(--p)) / 2);
+            box-sizing: border-box;
+            border: calc(2 * var(--p)) solid #ff2d1c;
+            border-radius: calc(15 * var(--p));
+            background: rgba(255, 45, 28, 0.18);
+            box-shadow: 0 0 calc(12 * var(--p)) rgba(255, 45, 28, 0.55), inset 0 0 calc(8 * var(--p)) rgba(255, 45, 28, 0.35);
+            transform: translate3d(0, 0, 0);
+            transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+            pointer-events: none;
+            will-change: transform;
+        }
+
+        .lcd-dlg-slider.right {
+            transform: translate3d(calc(100% + 10 * var(--p)), 0, 0);
+        }
+
+        .lcd-dlg-slider.move {
+            animation: dlg-stretch 480ms ease-out;
+        }
+
+        .lcd-dlg-btn {
+            position: relative;
+            z-index: 1;
+            flex: 1;
+            height: calc(30 * var(--p));
+            border: calc(2 * var(--p)) solid transparent;
+            border-radius: calc(15 * var(--p));
+            color: #eaf53a;
+            font-size: calc(17 * var(--p));
+            font-weight: 700;
+            line-height: calc(26 * var(--p));
+            text-align: center;
+            cursor: pointer;
+            transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+        }
+
+        .lcd-dlg-btn.sel {
+            color: #ff2d1c;
+            animation: dlg-btn-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes dlg-stretch {
+            0% { scale: 1 1; }
+            40% { scale: 1.06 0.9; }
+            100% { scale: 1 1; }
+        }
+
+        @keyframes dlg-btn-pop {
+            0% { scale: 0.86; }
+            55% { scale: 1.1; }
+            100% { scale: 1; }
+        }
+
+        @keyframes dlg-fade {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes dlg-pop {
+            from { opacity: 0; transform: translateY(calc(8 * var(--p))) scale(0.86); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .central-logo {
+            position: absolute;
+            top: 56%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 15;
+            pointer-events: none;
+        }
+
+        .logo-frame {
+            position: relative;
+            display: block;
+        }
+
+        .logo-frame:not(.ready) .logo-glow {
+            visibility: hidden;
+        }
+
+        .logo-glow {
+            position: absolute;
+            inset: -30% -14%;
+            z-index: 1;
+            background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(255, 45, 65, 0.85) 0%, rgba(255, 25, 45, 0.5) 38%, rgba(255, 0, 30, 0) 72%);
+            filter: blur(calc(1.2 * var(--u)));
+            animation: neon-flicker 6s linear infinite;
+        }
+
+        .logo-glow::after {
+            content: '';
+            position: absolute;
+            inset: 18% 10%;
+            background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(255, 130, 140, 0.55) 0%, rgba(255, 40, 60, 0) 65%);
+        }
+
+        .logo-img {
+            position: relative;
+            z-index: 2;
+            display: block;
+            width: min(calc(69 * var(--u)), 52cqw);
+            height: auto;
+            object-fit: contain;
+            filter:
+                drop-shadow(0 0 calc(0.4 * var(--u)) rgba(255, 70, 90, 0.95))
+                drop-shadow(0 0 calc(1.2 * var(--u)) rgba(255, 30, 50, 0.85))
+                drop-shadow(0 0 calc(3 * var(--u)) rgba(255, 0, 30, 0.65));
+        }
+
+        @keyframes neon-flicker {
+            0%, 44%, 56%, 100% { opacity: 1; }
+            46% { opacity: 0.55; }
+            48% { opacity: 1; }
+            50% { opacity: 0.7; }
+            52% { opacity: 1; }
+            54% { opacity: 0.85; }
+        }
+
+        .knob-wrapper {
+            position: absolute;
+            z-index: 30;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .knob {
+            position: relative;
+            width: var(--knob-size);
+            height: var(--knob-size);
+            border-radius: 50%;
+            cursor: pointer;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .knob > span {
+            position: absolute;
+            display: block;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .knob-shadow {
+            inset: 10% 6% -8% 6%;
+            background: rgba(0, 0, 0, 0.75);
+            filter: blur(calc(0.8 * var(--u)));
+            opacity: 0.9;
+            transform: translateY(calc(0.9 * var(--u))) scale(1);
+            transition: transform 750ms var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1)), opacity 500ms ease;
+            will-change: transform;
+        }
+
+        .knob-glow {
+            inset: -8%;
+            opacity: 0;
+            box-shadow: 0 0 calc(2.2 * var(--u)) calc(0.6 * var(--u)) var(--glow, #19ff5a);
+            transition: opacity 500ms ease;
+        }
+
+        .knob-cap {
+            inset: 0;
+            background: radial-gradient(circle at 35% 35%, var(--metallic-light) 0%, var(--metallic-mid) 30%, var(--metallic-dark) 80%);
+            border: 3px solid #111;
+            box-shadow:
+                inset 0 4px 5px rgba(255, 255, 255, 0.6),
+                inset 0 -4px 5px rgba(0, 0, 0, 0.6);
+            transform: translateY(0) scale(1);
+            transition:
+                transform 750ms var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1)),
+                border-color 400ms ease,
+                filter 500ms ease;
+            will-change: transform;
+        }
+
+        .knob-cap::before {
+            content: '';
+            position: absolute;
+            top: 15%;
+            left: 15%;
+            right: 15%;
+            bottom: 15%;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, #9ca3af, #d1d5db, #6b7280, #f3f4f6, #9ca3af);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+            transform: rotate(0deg);
+            transition: transform 900ms var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+        }
+
+        .knob-cap::after {
+            content: '';
+            position: absolute;
+            top: 6%;
+            left: 14%;
+            width: 55%;
+            height: 30%;
+            border-radius: 50%;
+            background: linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+            transform: rotate(-18deg);
+            opacity: 0.85;
+            transition: opacity 500ms ease;
+        }
+
+        .knob-ring {
+            inset: 0;
+            border: 3px solid rgba(255, 214, 120, 0.95);
+            opacity: 0;
+        }
+
+        .knob.pressing .knob-cap {
+            transform: translateY(calc(0.5 * var(--u))) scale(0.92);
+            transition:
+                transform 90ms cubic-bezier(0.22, 0.9, 0.3, 1),
+                border-color 400ms ease,
+                filter 500ms ease;
+        }
+
+        .knob.pressing .knob-cap::before {
+            transform: rotate(24deg);
+            transition: transform 120ms cubic-bezier(0.22, 0.9, 0.3, 1);
+        }
+
+        .knob.pressing .knob-cap::after {
+            opacity: 0.35;
+            transition: opacity 90ms ease;
+        }
+
+        .knob.pressing .knob-shadow {
+            transform: translateY(calc(0.3 * var(--u))) scale(0.84);
+            opacity: 0.55;
+            transition: transform 90ms cubic-bezier(0.22, 0.9, 0.3, 1), opacity 90ms ease;
+        }
+
+        .knob.disabled {
+            cursor: not-allowed;
+        }
+
+        .knob.disabled .knob-cap {
+            filter: brightness(0.6);
+        }
+
+        .knob.active-power .knob-glow {
+            opacity: 1;
+            --glow: #ff2a2a;
+        }
+
+        .knob.active-power .knob-cap {
+            border-color: #ff2a2a;
+        }
+
+        .knob.active-play .knob-glow {
+            opacity: 1;
+            --glow: #19ff5a;
+        }
+
+        .knob.active-play .knob-cap {
+            border-color: #19ff5a;
+        }
+
+        .knob-label {
+            color: #fff;
+            font-size: clamp(9px, calc(1.5 * var(--u)), 24px);
+            text-shadow: 2px 2px 4px rgba(20, 4, 0, 0.9);
+            text-transform: uppercase;
+            font-style: italic;
+            transition: transform 700ms var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1)), opacity 400ms ease;
+        }
+
+        .knob-wrapper:has(.knob.pressing) .knob-label {
+            transform: translateY(calc(0.3 * var(--u)));
+            opacity: 0.8;
+            transition: transform 90ms ease-out, opacity 90ms ease-out;
+        }
+
+        #kw-prev { top: 14%; left: 7%; }
+        #kw-next { top: 14%; left: 22%; }
+        #kw-remove { top: 64.5%; left: 7%; }
+        #kw-upload { top: 64.5%; left: 22%; }
+        #kw-power { top: 64.5%; left: 50%; transform: translateX(-50%); }
+        #kw-doremi { top: 64.5%; left: calc(78% - var(--knob-size)); }
+        #kw-play { top: 64.5%; right: 7%; }
+
+        .tempo-group {
+            position: absolute;
+            top: 14%;
+            right: 7%;
+            width: calc(15% + var(--knob-size));
+            display: grid;
+            grid-template-columns: var(--knob-size) minmax(0, 1fr) var(--knob-size);
+            z-index: 30;
+        }
+
+        .tempo-group .knob-wrapper {
+            position: static;
+        }
+
+        .tempo-center {
+            padding-top: calc(var(--knob-size) + 10px);
+            display: flex;
+            justify-content: center;
+            white-space: nowrap;
+        }
+
+        .doremi-screen {
+            position: absolute;
+            inset: 0;
+            z-index: 60;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(#0d0d12, #050507);
+            visibility: hidden;
+            pointer-events: none;
+            transform: translate3d(0, 100%, 0);
+            will-change: transform, opacity;
+        }
+
+        .doremi-screen.shown {
+            visibility: visible;
+        }
+
+        .doremi-screen.open {
+            pointer-events: auto;
+        }
+
+        .doremi-screen.mode-h .dm-roll {
+            display: none;
+        }
+
+        .doremi-screen.mode-v .dm-hz {
+            display: none;
+        }
+
+        .dm-head {
+            flex: none;
+            height: calc(5 * var(--u));
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 calc(2 * var(--u));
+            color: #fff;
+            font-size: clamp(11px, calc(2 * var(--u)), 28px);
+            border-bottom: 2px solid #ff2d3c;
+            box-shadow: 0 2px 14px rgba(255, 45, 60, 0.45);
+            background: #0d0d12;
+            position: relative;
+            z-index: 3;
+            touch-action: none;
+            cursor: grab;
+        }
+
+        .dm-title { font-weight: 900; letter-spacing: 0.14em; font-style: italic; }
+
+        .dm-range {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #eaf53a;
+            font-family: 'Roboto Mono', ui-monospace, monospace;
+            font-weight: 700;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .dm-actions {
+            display: flex;
+            align-items: center;
+            gap: calc(0.8 * var(--u));
+        }
+
+        .dm-mode,
+        .dm-close {
+            border: 0;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: inherit;
+            font-weight: 900;
+            padding: 0.2em 0.9em;
+            border-radius: 999px;
+        }
+
+        .dm-mode {
+            background: #fff;
+            color: #000;
+        }
+
+        .dm-mode.on {
+            background: #eaf53a;
+        }
+
+        .dm-close {
+            background: #ff2d3c;
+            color: #fff;
+        }
+
+        .dm-roll {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+            overflow: hidden;
+            touch-action: none;
+            background: #0a0a0e;
+        }
+
+        .dm-content {
+            --dm-row: 28px;
+            --dm-key-w: 96px;
+            --dm-count: 121;
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            height: calc(var(--dm-row) * var(--dm-count));
+            display: flex;
+            will-change: transform;
+        }
+
+        .dm-keys {
+            position: relative;
+            flex: none;
+            width: var(--dm-key-w);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #111;
+            z-index: 2;
+            box-shadow: 4px 0 12px rgba(0, 0, 0, 0.6);
+        }
+
+        .dm-lanes {
+            flex: 1;
+            min-width: 0;
+            height: 100%;
+            cursor: grab;
+        }
+
+        .dm-canvas {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .white-key,
+        .black-key {
+            position: relative;
+            flex: none;
+            width: 100%;
+            height: var(--dm-row);
+            cursor: pointer;
+        }
+
+        .white-key {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 7px;
+            background: linear-gradient(to right, #c4c8d0 0%, #ffffff 16%, #eef0f4 100%);
+            border-bottom: 1px solid #848a96;
+        }
+
+        .black-key {
+            background: linear-gradient(to right, #3b3b42 0%, #000 58%, #e9ebef 58%, #f5f6f8 100%);
+            border-bottom: 1px solid #1a1a1f;
+        }
+
+        .white-key::after,
+        .black-key::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to right, #d97706 0%, #fbbf24 100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 380ms ease-out;
+        }
+
+        .black-key::after {
+            right: 42%;
+            background: linear-gradient(to right, #b00 0%, #f59f00 100%);
+        }
+
+        .white-key.pressed::after,
+        .black-key.pressed::after {
+            opacity: 1;
+            transition: opacity 40ms linear;
+        }
+
+        .key-label {
+            display: none;
+            position: relative;
+            z-index: 1;
+            font-family: Arial, sans-serif;
+            font-size: clamp(8px, calc(var(--dm-row) * 0.42), 14px);
+            font-weight: bold;
+            color: #1b1d22;
+            pointer-events: none;
+        }
+
+        .white-key.c-note .key-label,
+        .dm-fine .white-key .key-label {
+            display: block;
+        }
+
+        .dm-thumb {
+            position: absolute;
+            right: 3px;
+            top: 0;
+            width: 4px;
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.55);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 300ms ease;
+            z-index: 5;
+        }
+
+        .dm-thumb.show {
+            opacity: 1;
+        }
+
+        .dm-hz {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            background: #0a0a0e;
+        }
+
+        .hz-nav {
+            flex: none;
+            position: relative;
+            height: calc(3 * var(--u));
+            margin: calc(0.7 * var(--u)) calc(2 * var(--u));
+            border-radius: 999px;
+            background: #1a1a20;
+            border: 1px solid #3a3a44;
+            touch-action: none;
+            cursor: pointer;
+            overflow: hidden;
+            outline: none;
+        }
+
+        .hz-nthumb {
+            position: absolute;
+            left: 0;
+            top: 0; bottom: 0;
+            will-change: transform;
+            border-radius: 999px;
+            background: rgba(255, 45, 60, 0.55);
+            border: 1px solid #ff2d3c;
+            pointer-events: none;
+        }
+
+        .hz-tick {
+            position: absolute;
+            top: 0; bottom: 0;
+            display: flex;
+            align-items: center;
+            padding-left: 3px;
+            border-left: 1px solid #555;
+            color: #cfcfd6;
+            font-family: 'Roboto Mono', ui-monospace, monospace;
+            font-size: clamp(7px, calc(1.1 * var(--u)), 13px);
+            pointer-events: none;
+        }
+
+        .hz-scroll {
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+            touch-action: none;
+            position: relative;
+        }
+
+        .hz-keys {
+            will-change: transform;
+            position: relative;
+            height: 100%;
+            width: calc(100% * 71 / 36);
+            display: flex;
+            background: #111;
+        }
+
+        .hk-white {
+            flex: none;
+            width: calc(100% / 71);
+            background: linear-gradient(to bottom, #fff 0%, #d1d5db 100%);
+            border: 1px solid #9ca3af;
+            border-bottom: 8px solid #6b7280;
+            border-radius: 0 0 4px 4px;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: 8px;
+            transform: translateY(0);
+            transition: transform 600ms var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+            will-change: transform;
+        }
+
+        .hk-white::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(to bottom, #fbbf24 0%, #d97706 100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 380ms ease-out;
+        }
+
+        .hk-white.pressed {
+            transform: translateY(calc(0.4 * var(--u)));
+            transition: transform 70ms cubic-bezier(0.22, 0.9, 0.3, 1);
+        }
+
+        .hk-white.pressed::after {
+            opacity: 1;
+            transition: opacity 50ms linear;
+        }
+
+        .hk-black {
+            position: absolute;
+            top: 0;
+            height: 60%;
+            background: linear-gradient(to bottom, #333 0%, #000 100%);
+            border: 1px solid #111;
+            border-bottom: 6px solid #444;
+            border-radius: 0 0 3px 3px;
+            cursor: pointer;
+            z-index: 2;
+            box-shadow: 2px 4px 6px rgba(0, 0, 0, 0.6);
+            transform: translateY(0);
+            transition: transform 600ms var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+            will-change: transform;
+        }
+
+        .hk-black::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(to bottom, #f59f00 0%, #b00 100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 380ms ease-out;
+        }
+
+        .hk-black.pressed {
+            transform: translateY(calc(0.35 * var(--u)));
+            transition: transform 70ms cubic-bezier(0.22, 0.9, 0.3, 1);
+        }
+
+        .hk-black.pressed::after {
+            opacity: 1;
+            transition: opacity 50ms linear;
+        }
+
+        .hk-label {
+            position: relative;
+            z-index: 1;
+            font-family: Arial, sans-serif;
+            font-size: clamp(7px, calc(0.75 * var(--u)), 12px);
+            font-weight: bold;
+            color: #111;
+            pointer-events: none;
+        }
+
+        .rotate-screen {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+        }
+
+        @media (orientation: portrait) {
+            .rotate-screen {
+                display: flex;
+            }
+        }
+
+        .rotate-phone {
+            width: min(30vw, 130px);
+            height: auto;
+            overflow: visible;
+            transform-origin: 50% 50%;
+            animation: rotate-phone 2.8s infinite;
+            animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+        }
+
+        @keyframes rotate-phone {
+            0%, 18% { transform: rotate(0deg); }
+            50%, 72% { transform: rotate(-90deg); }
+            100% { transform: rotate(0deg); }
+        }
+
+        .history-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 900;
+            background: rgba(0, 0, 0, 0.6);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 300ms ease;
+        }
+
+        .history-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 950;
+            width: min(88vw, 420px);
+            display: flex;
+            flex-direction: column;
+            background: #0b0b0c;
+            color: #fff;
+            border-left: 4px solid #ff2d3c;
+            box-shadow: -8px 0 40px rgba(255, 30, 50, 0.45);
+            transform: translateX(110%);
+            transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        body.history-open .history-backdrop {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        body.history-open .history-panel {
+            transform: translateX(0);
+        }
+
+        .history-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: #ff2d3c;
+            border-bottom: 4px solid #fff;
+        }
+
+        .history-title {
+            font-family: 'Bangers', Impact, 'Arial Black', sans-serif;
+            font-size: 34px;
+            letter-spacing: 0.06em;
+            color: #fff;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        .h-btn {
+            padding: 8px 12px;
+            border: 2px solid #fff;
+            border-radius: 999px;
+            background: #000;
+            color: #fff;
+            font-size: 11px;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            transform: scale(1);
+            transition: transform 600ms var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1)), background 200ms ease;
+        }
+
+        .h-btn:active {
+            transform: scale(0.93);
+            background: #ff2d3c;
+            transition: transform 90ms cubic-bezier(0.22, 0.9, 0.3, 1), background 90ms ease;
+        }
+
+        .history-notice {
+            min-height: 26px;
+            padding: 6px 16px;
+            font-size: 11px;
+            color: #fff;
+            background: #1a1a1c;
+        }
+
+        .history-tools {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px 16px;
+            border-bottom: 1px solid #2f2f33;
+        }
+
+        .history-list {
+            flex: 1;
+            overflow-y: auto;
+            touch-action: pan-y;
+            overscroll-behavior: contain;
+            padding: 6px 12px 20px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 6px;
+            border-bottom: 1px solid #2a2a2d;
+        }
+
+        .history-tag {
+            flex: none;
+            min-width: 60px;
+            padding: 4px 6px;
+            border-radius: 6px;
+            background: #ff2d3c;
+            color: #fff;
+            font-size: 10px;
+            letter-spacing: 0.05em;
+            text-align: center;
+        }
+
+        .history-tag.t-image,
+        .history-tag.t-take {
+            background: #fff;
+            color: #000;
+        }
+
+        .history-tag.t-tempo,
+        .history-tag.t-mode,
+        .history-tag.t-play,
+        .history-tag.t-pilih,
+        .history-tag.t-power {
+            background: #2a2a2d;
+            color: #fff;
+            border: 1px solid #555;
+        }
+
+        .history-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .history-label {
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .history-time {
+            margin-top: 2px;
+            font-family: Arial, sans-serif;
+            font-size: 10px;
+            color: #9a9a9f;
+        }
+
+        .history-empty {
+            padding: 28px 8px;
+            text-align: center;
+            font-size: 12px;
+            color: #9a9a9f;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .doremi-screen,
+            .doremi-screen.open {
+                transition: none;
+            }
+
+            .rotate-phone,
+            .lcd-confirm.open,
+            .lcd-dialog,
+            .logo-glow {
+                animation: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="rotate-screen" id="rotate-screen" role="img" aria-label="Putar layar ke horizontal">
+        <svg class="rotate-phone" viewBox="0 0 64 112" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="4" y="4" width="56" height="104" rx="9"/>
+            <path d="M4 20H60"/>
+            <path d="M26 12H36"/>
+            <circle cx="42" cy="12" r="1.2"/>
+            <path d="M4 86H60"/>
+            <circle cx="32" cy="97" r="4.5"/>
+        </svg>
+    </div>
+
+    <div class="module">
+        <div class="bg-stage">
+            <div class="bg-layer show"></div>
+            <div class="bg-layer"></div>
+            <div class="bg-vignette"></div>
+        </div>
+
+        <div class="led-screen" id="led-screen">
+            <div class="lcd-frame"></div>
+            <div class="led-track" id="lcd-track" title="Riwayat"><span class="led-title" id="lcd-title">SYS: OFFLINE</span></div>
+            <div class="led-grid lcd-n" id="led-grid">
+                <span class="lcd-ind" id="lcd-ind"></span>
+                <span class="lcd-time" id="lcd-time">00:00</span>
+                <div class="led-bars" id="led-bars"></div>
+            </div>
+            <div class="lcd-sep lcd-n"><div class="lcd-prog" id="lcd-prog"></div></div>
+            <div class="lcd-card r0 c1 lcd-n"><span class="lcd-lbl">MODULE</span><span class="lcd-val" id="lcd-bt">RYZTECH</span></div>
+            <div class="lcd-btn stop lcd-n" id="lcd-status">STOP</div>
+            <div class="lcd-card r1 c1 lcd-n"><span class="lcd-lbl">NOMOR</span><span class="lcd-val long" id="lcd-fileIdx">0000 / 0000</span></div>
+            <div class="lcd-card r1 c2 lcd-n"><span class="lcd-lbl">TEMPO</span><span class="lcd-val" id="lcd-tempo">---</span></div>
+            <div class="lcd-card r2 c1 lcd-n"><span class="lcd-lbl">WIFI</span><span class="lcd-val off" id="lcd-wifi">OFF</span></div>
+            <div class="lcd-card r2 c2 lcd-n"><span class="lcd-lbl">BLUETOOTH</span><span class="lcd-val off" id="lcd-btval">OFF</span></div>
+            <div class="lcd-plist" id="lcd-plist">
+                <div class="lcd-prows" id="lcd-prows"><div class="lcd-pthumb" id="lcd-pthumb"></div></div>
+                <div class="lcd-pnum" id="lcd-pnum"><span id="lcd-pnum-label">Nomor:</span><span id="lcd-pnum-val">0000 / 0000</span></div>
+            </div>
+            <div class="lcd-confirm" id="lcd-confirm">
+                <div class="lcd-dialog">
+                    <div class="lcd-dlg-msg" id="lcd-dlg-msg"></div>
+                    <div class="lcd-dlg-row">
+                        <div class="lcd-dlg-slider" id="lcd-dlg-slider"></div>
+                        <div class="lcd-dlg-btn" id="lcd-dlg-yes">Ya</div>
+                        <div class="lcd-dlg-btn" id="lcd-dlg-no">Gajadi</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="central-logo">
+            <div class="logo-frame">
+                <span class="logo-glow"></span>
+                <img class="logo-img" id="logo-img" src="https://raw.githubusercontent.com/pi-pop/p/main/ryz.png" alt="RYZ MUSICAL" draggable="false">
+            </div>
+        </div>
+
+        <div class="knob-wrapper" id="kw-prev">
+            <div class="knob sys-ctrl disabled" id="btn-prev"></div>
+            <div class="knob-label">PREV</div>
+        </div>
+        <div class="knob-wrapper" id="kw-next">
+            <div class="knob sys-ctrl disabled" id="btn-next"></div>
+            <div class="knob-label">NEXT</div>
+        </div>
+
+        <div class="tempo-group">
+            <div class="knob-wrapper">
+                <div class="knob sys-ctrl disabled" id="btn-tempo-minus"></div>
+                <div class="knob-label">-</div>
+            </div>
+            <div class="tempo-center knob-label">TEMPO</div>
+            <div class="knob-wrapper">
+                <div class="knob sys-ctrl disabled" id="btn-tempo-plus"></div>
+                <div class="knob-label">+</div>
+            </div>
+        </div>
+
+        <div class="knob-wrapper" id="kw-remove">
+            <div class="knob sys-ctrl disabled" id="btn-remove"></div>
+            <div class="knob-label">REMOVE</div>
+        </div>
+        <div class="knob-wrapper" id="kw-upload">
+            <input type="file" id="midiInput" accept=".mid,.midi,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif" style="display: none;" multiple>
+            <div class="knob sys-ctrl disabled" id="btn-upload"></div>
+            <div class="knob-label">UPLOAD</div>
+        </div>
+        <div class="knob-wrapper" id="kw-power">
+            <div class="knob" id="btn-power"></div>
+            <div class="knob-label">PWR</div>
+        </div>
+        <div class="knob-wrapper" id="kw-doremi">
+            <div class="knob sys-ctrl disabled" id="btn-doremi"></div>
+            <div class="knob-label">DOREMI</div>
+        </div>
+        <div class="knob-wrapper" id="kw-play">
+            <div class="knob sys-ctrl disabled" id="btn-play"></div>
+            <div class="knob-label">PLAY</div>
+        </div>
+
+        <div class="doremi-screen mode-v" id="doremi-screen">
+            <div class="dm-head" id="dm-head">
+                <span class="dm-title">DOREMI</span>
+                <span class="dm-range" id="dm-range">C1 - C10</span>
+                <div class="dm-actions">
+                    <button class="dm-mode" id="dm-mode-h" type="button">HORIZONTAL</button>
+                    <button class="dm-mode on" id="dm-mode-v" type="button">VERTIKAL</button>
+                    <button class="dm-close" id="dm-close" type="button">TUTUP</button>
+                </div>
+            </div>
+            <div class="dm-roll" id="dm-roll">
+                <div class="dm-content" id="dm-content">
+                    <div class="dm-keys" id="keyboard-container"></div>
+                    <div class="dm-lanes" id="dm-lanes"></div>
+                </div>
+                <canvas class="dm-canvas" id="dm-canvas"></canvas>
+                <div class="dm-thumb" id="dm-thumb"></div>
+            </div>
+            <div class="dm-hz" id="dm-hz">
+                <div class="hz-nav" id="hz-nav"><div class="hz-nthumb" id="hz-nthumb"></div></div>
+                <div class="hz-scroll" id="hz-scroll">
+                    <div class="hz-keys" id="hz-keys"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="history-backdrop" id="history-backdrop"></div>
+    <aside class="history-panel" id="history-panel" aria-label="Riwayat">
+        <div class="history-head">
+            <div class="history-title">RIWAYAT</div>
+            <button class="h-btn" id="history-close" type="button">TUTUP</button>
+        </div>
+        <div class="history-notice" id="history-notice"></div>
+        <div class="history-tools">
+            <button class="h-btn" id="hist-default-bg" type="button">BG BAWAAN</button>
+            <button class="h-btn" id="hist-clear-songs" type="button">HAPUS LAGU</button>
+            <button class="h-btn" id="hist-clear" type="button">HAPUS RIWAYAT</button>
+        </div>
+        <div class="history-list" id="history-list"></div>
+    </aside>
+
+    <script>
+        let isPowerOn = false;
+        let isPlaying = false;
+        let tempo = 120;
+        let playlist = [];
+        let currentFileIndex = 0;
+        let backgroundId = null;
+        let tempSongId = 0;
+        let synth = null;
+        let playingSong = null;
+        let queued = false;
+        let tempoFor = null;
+        let scrollBusy = false;
+
+        const defaultBackground = "https://raw.githubusercontent.com/pi-pop/bg/main/bg.jpg";
+
+        function buildSpringEasing() {
+            const steps = 64;
+            const zeta = 0.42;
+            const w0 = 24;
+            const wd = w0 * Math.sqrt(1 - zeta * zeta);
+            const points = [];
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const value = i === steps ? 1 : 1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd * t) + (zeta * w0 / wd) * Math.sin(wd * t));
+                points.push(value.toFixed(4));
+            }
+            return `linear(${points.join(', ')})`;
+        }
+
+        if (window.CSS && CSS.supports('animation-timing-function', 'linear(0, 1)')) {
+            document.documentElement.style.setProperty('--spring', buildSpringEasing());
+        }
+
+        const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        const noteMap = [];
+        for (let octave = 1; octave <= 5; octave++) {
+            noteNames.forEach(name => noteMap.push(name + octave));
+        }
+        noteMap.push("C6");
+        const allNotes = [];
+        for (let octave = 0; octave <= 9; octave++) {
+            noteNames.forEach(name => allNotes.push(name + octave));
+        }
+        allNotes.push("C10");
+        const noteIndex = {};
+        noteMap.forEach((note, i) => { noteIndex[note] = i; });
+        const lowestMidi = 24;
+        const highestMidi = lowestMidi + noteMap.length - 1;
+
+        function keyId(note) {
+            return 'key-' + note.replace('#', 's');
+        }
+
+        const keyGroups = new Map();
+
+        function registerKey(note, el) {
+            let group = keyGroups.get(note);
+            if (!group) {
+                group = [];
+                keyGroups.set(note, group);
+            }
+            group.push(el);
+        }
+
+        function setKeyPressed(note, on) {
+            const group = keyGroups.get(note);
+            if (group) group.forEach(el => el.classList.toggle('pressed', on));
+        }
+
+        function mapMidiToNote(midi) {
+            let value = midi;
+            while (value < lowestMidi) value += 12;
+            while (value > highestMidi) value -= 12;
+            return noteMap[value - lowestMidi];
+        }
+
+        function buildKeyboard() {
+            const container = document.getElementById('keyboard-container');
+            for (let i = allNotes.length - 1; i >= 0; i--) {
+                const note = allNotes[i];
+                const el = document.createElement('div');
+                el.id = keyId(note);
+                el.dataset.note = note;
+
+                if (note.includes('#')) {
+                    el.className = 'black-key';
+                } else {
+                    el.className = note.startsWith('C') ? 'white-key c-note' : 'white-key';
+                    const label = document.createElement('span');
+                    label.className = 'key-label';
+                    label.textContent = note;
+                    el.appendChild(label);
+                }
+
+                registerKey(note, el);
+                container.appendChild(el);
+            }
+        }
+
+        function buildHzKeyboard() {
+            const container = document.getElementById('hz-keys');
+            const whiteTotal = allNotes.filter(note => !note.includes('#')).length;
+            const blackWidth = (100 / whiteTotal) * 0.6;
+            let whiteCount = 0;
+            allNotes.forEach(note => {
+                const el = document.createElement('div');
+                el.dataset.note = note;
+                if (note.includes('#')) {
+                    el.className = 'hk-black';
+                    el.style.width = blackWidth + '%';
+                    el.style.left = ((whiteCount / whiteTotal) * 100 - blackWidth / 2) + '%';
+                } else {
+                    el.className = 'hk-white';
+                    const label = document.createElement('span');
+                    label.className = 'hk-label';
+                    label.textContent = note;
+                    el.appendChild(label);
+                    whiteCount++;
+                }
+                registerKey(note, el);
+                container.appendChild(el);
+            });
+        }
+
+        function decorateKnobs() {
+            document.querySelectorAll('.knob').forEach(knob => {
+                ['knob-shadow', 'knob-glow', 'knob-cap', 'knob-ring'].forEach(name => {
+                    const layer = document.createElement('span');
+                    layer.className = name;
+                    knob.appendChild(layer);
+                });
+            });
+        }
+
+        function fireRing(knob) {
+            const ring = knob.querySelector('.knob-ring');
+            if (!ring || !ring.animate) return;
+            ring.animate(
+                [
+                    { opacity: 0.9, transform: 'scale(0.95)' },
+                    { opacity: 0, transform: 'scale(1.8)' }
+                ],
+                { duration: 650, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+            );
+        }
+
+        function bindKnobPress() {
+            const minimumPress = 110;
+            document.querySelectorAll('.knob').forEach(knob => {
+                let releaseTimer = null;
+                let pressedAt = 0;
+
+                const press = () => {
+                    if (knob.classList.contains('disabled')) return;
+                    clearTimeout(releaseTimer);
+                    pressedAt = performance.now();
+                    knob.classList.add('pressing');
+                    fireRing(knob);
+                };
+
+                const release = () => {
+                    if (!knob.classList.contains('pressing')) return;
+                    const wait = Math.max(0, minimumPress - (performance.now() - pressedAt));
+                    clearTimeout(releaseTimer);
+                    releaseTimer = setTimeout(() => knob.classList.remove('pressing'), wait);
+                };
+
+                knob.addEventListener('pointerdown', press);
+                knob.addEventListener('pointerup', release);
+                knob.addEventListener('pointerleave', release);
+                knob.addEventListener('pointercancel', release);
+            });
+        }
+
+        buildKeyboard();
+        buildHzKeyboard();
+        decorateKnobs();
+        bindKnobPress();
+
+        const btnPower = document.getElementById('btn-power');
+        const btnPlay = document.getElementById('btn-play');
+        const btnUpload = document.getElementById('btn-upload');
+        const btnRemove = document.getElementById('btn-remove');
+        const btnDoremi = document.getElementById('btn-doremi');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnTempMinus = document.getElementById('btn-tempo-minus');
+        const btnTempPlus = document.getElementById('btn-tempo-plus');
+        const midiInput = document.getElementById('midiInput');
+
+        const lcdTrack = document.getElementById('lcd-track');
+        const titleEl = document.getElementById('lcd-title');
+        const lcdTempo = document.getElementById('lcd-tempo');
+        const lcdFileIdx = document.getElementById('lcd-fileIdx');
+        const lcdStatus = document.getElementById('lcd-status');
+        const ledGrid = document.getElementById('led-grid');
+        const ledBars = document.getElementById('led-bars');
+        const lcdTime = document.getElementById('lcd-time');
+        const lcdInd = document.getElementById('lcd-ind');
+        const lcdBt = document.getElementById('lcd-bt');
+        const lcdBtVal = document.getElementById('lcd-btval');
+        const lcdProg = document.getElementById('lcd-prog');
+        const pad4 = (n) => String(n).padStart(4, '0');
+        let lastClock = '';
+        let lastProg = -1;
+
+        function renderClock() {
+            let secs = 0;
+            if (isPowerOn && isPlaying) {
+                try { secs = Math.max(0, Tone.Transport.seconds || 0); } catch (e) { secs = 0; }
+            }
+            const s = Math.min(5999, Math.floor(secs));
+            const text = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+            if (text !== lastClock) {
+                lastClock = text;
+                lcdTime.textContent = text;
+            }
+
+            let done = 0;
+            if (isPowerOn && isPlaying && timeline.endTick > 0) {
+                try { done = Math.min(1, Math.max(0, Tone.Transport.ticks / timeline.endTick)); } catch (e) { done = 0; }
+            }
+            const pct = Math.round(done * 1000) / 10;
+            if (pct !== lastProg) {
+                lastProg = pct;
+                lcdProg.style.width = pct + '%';
+            }
+        }
+        const sysControls = document.querySelectorAll('.sys-ctrl');
+
+        let dbPromise = null;
+
+        const lcdWifi = document.getElementById('lcd-wifi');
+        const radio = { wifi: false, bt: false };
+        let radioBusy = false;
+
+        function connectionInfo() {
+            return navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
+        }
+
+        function setRadioCell(el, on) {
+            el.textContent = on ? 'ON' : 'OFF';
+            el.classList.toggle('on', on);
+            el.classList.toggle('off', !on);
+        }
+
+        function renderRadio() {
+            setRadioCell(lcdWifi, isPowerOn && radio.wifi);
+            setRadioCell(lcdBtVal, isPowerOn && radio.bt);
+        }
+
+        function detectWifi() {
+            if (navigator.onLine === false) return false;
+            const info = connectionInfo();
+            if (info && typeof info.type === 'string') {
+                if (info.type === 'wifi') return true;
+                if (info.type === 'unknown') return true;
+                return false;
+            }
+            return true;
+        }
+
+        function withTimeout(promise, ms) {
+            return new Promise((resolve) => {
+                const timer = setTimeout(() => resolve(null), ms);
+                Promise.resolve(promise).then(
+                    (value) => { clearTimeout(timer); resolve(value); },
+                    () => { clearTimeout(timer); resolve(null); }
+                );
+            });
+        }
+
+        async function readBluetooth() {
+            const info = connectionInfo();
+            if (info && info.type === 'bluetooth') return true;
+            const api = navigator.bluetooth;
+            let availability = null;
+            if (api) {
+                if (typeof api.getAvailability === 'function') {
+                    const value = await withTimeout(api.getAvailability(), 1500);
+                    if (typeof value === 'boolean') availability = value;
+                }
+                if (typeof api.getDevices === 'function') {
+                    const devices = await withTimeout(api.getDevices(), 1500);
+                    if (Array.isArray(devices) && devices.some(device => device.gatt && device.gatt.connected)) return true;
+                }
+                if (availability !== null) return availability;
+            }
+            if (navigator.mediaDevices && typeof navigator.mediaDevices.enumerateDevices === 'function') {
+                const list = await withTimeout(navigator.mediaDevices.enumerateDevices(), 1500);
+                if (Array.isArray(list) && list.some(item => item.kind === 'audiooutput' && /bluetooth|airpods|buds|\bbt\b/i.test(item.label || ''))) return true;
+            }
+            return null;
+        }
+
+        let radioAgain = false;
+        let btVerifyTimer = 0;
+
+        function commitBluetooth(value) {
+            if (typeof value !== 'boolean' || value === radio.bt) return;
+            radio.bt = value;
+            renderRadio();
+        }
+
+        async function probeRadio() {
+            if (radioBusy) {
+                radioAgain = true;
+                return;
+            }
+            radioBusy = true;
+            try {
+                do {
+                    radioAgain = false;
+                    radio.wifi = detectWifi();
+                    const reading = await readBluetooth();
+                    if (reading !== null && reading !== radio.bt) {
+                        clearTimeout(btVerifyTimer);
+                        btVerifyTimer = setTimeout(async () => {
+                            const again = await readBluetooth();
+                            if (again === reading) commitBluetooth(again);
+                        }, 350);
+                    }
+                    renderRadio();
+                } while (radioAgain);
+            } finally {
+                radioBusy = false;
+            }
+        }
+
+        function startRadioWatch() {
+            probeRadio();
+            const info = connectionInfo();
+            if (info && info.addEventListener) info.addEventListener('change', probeRadio);
+            window.addEventListener('online', probeRadio);
+            window.addEventListener('offline', probeRadio);
+            window.addEventListener('focus', probeRadio);
+            window.addEventListener('pageshow', probeRadio);
+            document.addEventListener('visibilitychange', () => { if (!document.hidden) probeRadio(); });
+            if (navigator.bluetooth && navigator.bluetooth.addEventListener) {
+                navigator.bluetooth.addEventListener('availabilitychanged', (e) => {
+                    clearTimeout(btVerifyTimer);
+                    commitBluetooth(!!e.value);
+                    probeRadio();
+                });
+            }
+            if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+                navigator.mediaDevices.addEventListener('devicechange', probeRadio);
+            }
+            setInterval(() => { if (!document.hidden) probeRadio(); }, 1500);
+        }
+
+        function openDb() {
+            if (dbPromise) return dbPromise;
+            dbPromise = new Promise((resolve, reject) => {
+                if (!window.indexedDB) {
+                    reject(new Error('indexedDB unavailable'));
+                    return;
+                }
+                const request = indexedDB.open('ryz-musical', 1);
+                request.onupgradeneeded = () => {
+                    const db = request.result;
+                    db.createObjectStore('kv', { keyPath: 'key' });
+                    ['songs', 'images', 'takes', 'history'].forEach(name => {
+                        db.createObjectStore(name, { keyPath: 'id', autoIncrement: true });
+                    });
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            return dbPromise;
+        }
+
+        function runStore(store, mode, action) {
+            return openDb().then(db => new Promise((resolve, reject) => {
+                const transaction = db.transaction(store, mode);
+                const request = action(transaction.objectStore(store));
+                transaction.oncomplete = () => resolve(request ? request.result : undefined);
+                transaction.onerror = () => reject(transaction.error);
+                transaction.onabort = () => reject(transaction.error);
+            }));
+        }
+
+        const dbAdd = (store, value) => runStore(store, 'readwrite', s => s.add(value));
+        const dbPut = (store, value) => runStore(store, 'readwrite', s => s.put(value));
+        const dbGet = (store, key) => runStore(store, 'readonly', s => s.get(key));
+        const dbAll = (store) => runStore(store, 'readonly', s => s.getAll());
+        const dbKeys = (store) => runStore(store, 'readonly', s => s.getAllKeys());
+        const dbDelete = (store, key) => runStore(store, 'readwrite', s => s.delete(key));
+        const dbClear = (store) => runStore(store, 'readwrite', s => s.clear());
+
+        function saveSettings() {
+            dbPut('kv', {
+                key: 'settings',
+                tempo,
+                trackIndex: currentFileIndex,
+                trackId: wantedTrackId !== null ? wantedTrackId : (playlist[currentFileIndex] ? playlist[currentFileIndex].id : null),
+                backgroundId
+            }).catch(() => {});
+        }
+
+        let historyCounter = 0;
+
+        function logHistory(type, label, ref) {
+            const entry = { at: Date.now(), type, label, ref: ref === undefined ? null : ref };
+            dbAdd('history', entry).then(() => {
+                historyCounter++;
+                if (historyCounter % 25 === 0) pruneHistory();
+                if (document.body.classList.contains('history-open')) renderHistory();
+            }).catch(() => {});
+        }
+
+        function pruneHistory() {
+            dbKeys('history').then(keys => {
+                const extra = keys.length - 300;
+                if (extra <= 0) return;
+                keys.slice(0, extra).forEach(key => dbDelete('history', key).catch(() => {}));
+            }).catch(() => {});
+        }
+
+        function pruneImages() {
+            dbKeys('images').then(keys => {
+                const extra = keys.length - 12;
+                if (extra <= 0) return;
+                keys.filter(key => key !== backgroundId).slice(0, extra).forEach(key => dbDelete('images', key).catch(() => {}));
+            }).catch(() => {});
+        }
+
+        const bgLayers = Array.from(document.querySelectorAll('.bg-layer'));
+        let activeBgLayer = 0;
+        let currentBgUrl = null;
+        let bgTimer = null;
+
+        function showBackground(cssUrl) {
+            const next = bgLayers[1 - activeBgLayer];
+            const current = bgLayers[activeBgLayer];
+            next.style.backgroundImage = `url("${cssUrl}")`;
+            next.classList.remove('show');
+            void next.offsetWidth;
+            next.classList.add('top');
+            current.classList.remove('top');
+            next.classList.add('show');
+            clearTimeout(bgTimer);
+            bgTimer = setTimeout(() => current.classList.remove('show'), 760);
+            activeBgLayer = 1 - activeBgLayer;
+        }
+
+        function applyBackground(blob) {
+            const previousUrl = currentBgUrl;
+            if (blob) {
+                currentBgUrl = URL.createObjectURL(blob);
+                showBackground(currentBgUrl);
+            } else {
+                currentBgUrl = null;
+                showBackground(defaultBackground);
+            }
+            if (previousUrl) setTimeout(() => URL.revokeObjectURL(previousUrl), 1500);
+        }
+
+        function checkImage(blob) {
+            return new Promise(resolve => {
+                const url = URL.createObjectURL(blob);
+                const img = new Image();
+                img.onload = () => { URL.revokeObjectURL(url); resolve(true); };
+                img.onerror = () => { URL.revokeObjectURL(url); resolve(false); };
+                img.src = url;
+            });
+        }
+
+        let currentTitle = '';
+        let flashUntil = 0;
+        let flashTimer = null;
+
+        const marquee = { phase: 'idle', x: 0, t0: 0, last: 0, raf: 0, metrics: null };
+
+        function marqueeApply() {
+            titleEl.style.transform = marquee.x === 0 ? '' : `translateX(${marquee.x}px)`;
+        }
+
+        function marqueeMetrics() {
+            const cs = getComputedStyle(lcdTrack);
+            const padL = parseFloat(cs.paddingLeft);
+            const padR = parseFloat(cs.paddingRight);
+            const contentW = lcdTrack.clientWidth - padL - padR;
+            const textW = titleEl.offsetWidth;
+            const restLeft = Math.max(0, (contentW - textW) / 2);
+            return {
+                restLeft,
+                hideX: -(restLeft + textW + padL + 4),
+                inX: contentW + padR - restLeft + 2,
+                speed: parseFloat(cs.fontSize) * 2.8
+            };
+        }
+
+        function marqueeReset() {
+            cancelAnimationFrame(marquee.raf);
+            marquee.raf = 0;
+            marquee.phase = 'idle';
+            marquee.x = 0;
+            titleEl.classList.remove('moving');
+            marqueeApply();
+        }
+
+        function marqueeTick(ts) {
+            const dt = Math.min(0.05, (ts - marquee.last) / 1000);
+            marquee.last = ts;
+
+            if (performance.now() < flashUntil) {
+                marquee.x = 0;
+                marquee.phase = 'wait';
+                marquee.t0 = ts;
+                titleEl.classList.remove('moving');
+                marqueeApply();
+                marquee.raf = requestAnimationFrame(marqueeTick);
+                return;
+            }
+
+            const m = marquee.metrics;
+            if (marquee.phase === 'wait') {
+                if (ts - marquee.t0 >= 3000) {
+                    titleEl.classList.add('moving');
+                    marquee.metrics = marqueeMetrics();
+                    marquee.phase = 'out';
+                }
+            } else if (marquee.phase === 'stophold') {
+                if (ts - marquee.t0 >= 1000) {
+                    marquee.phase = 'wait';
+                    marquee.t0 = ts;
+                }
+            } else if (marquee.phase === 'out') {
+                marquee.x -= m.speed * dt;
+                if (marquee.x <= m.hideX) {
+                    marquee.x = m.hideX;
+                    marquee.phase = 'gap';
+                    marquee.t0 = ts;
+                }
+            } else if (marquee.phase === 'gap') {
+                if (ts - marquee.t0 >= (isPlaying ? 1000 : 2000)) {
+                    marquee.x = m.inX;
+                    marquee.phase = 'in';
+                }
+            } else if (marquee.phase === 'in') {
+                marquee.x -= m.speed * dt;
+                if (marquee.x <= 0) {
+                    marquee.x = 0;
+                    marquee.phase = 'wait';
+                    marquee.t0 = ts;
+                    titleEl.classList.remove('moving');
+                }
+            } else {
+                return;
+            }
+
+            marqueeApply();
+            marquee.raf = requestAnimationFrame(marqueeTick);
+        }
+
+        function marqueeStart() {
+            cancelAnimationFrame(marquee.raf);
+            if (!isPowerOn) {
+                marqueeReset();
+                return;
+            }
+            titleEl.classList.remove('moving');
+            marquee.phase = 'wait';
+            marquee.x = 0;
+            marquee.t0 = performance.now();
+            marquee.last = marquee.t0;
+            marqueeApply();
+            marquee.raf = requestAnimationFrame(marqueeTick);
+        }
+
+        function marqueeStop() {
+            if (marquee.phase === 'idle') return;
+            cancelAnimationFrame(marquee.raf);
+            titleEl.classList.remove('moving');
+            marquee.x = 0;
+            marquee.phase = 'stophold';
+            marquee.t0 = performance.now();
+            marquee.last = marquee.t0;
+            marqueeApply();
+            marquee.raf = requestAnimationFrame(marqueeTick);
+        }
+
+        function setTitle(text) {
+            if (text === currentTitle) return;
+            currentTitle = text;
+            titleEl.textContent = text;
+            if (isPowerOn) marqueeStart();
+            else marqueeReset();
+        }
+
+        function flashTrack(message, duration) {
+            const time = duration || 1600;
+            flashUntil = performance.now() + time;
+            currentTitle = message;
+            titleEl.textContent = message;
+            marquee.x = 0;
+            marqueeApply();
+            clearTimeout(flashTimer);
+            flashTimer = setTimeout(() => {
+                flashUntil = 0;
+                updateUI();
+            }, time);
+        }
+
+        const BAR_COUNT = noteMap.length;
+        const barEls = [];
+        for (let i = 0; i < BAR_COUNT; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'led-bar';
+            bar.style.background = `hsl(${Math.round(i / (BAR_COUNT - 1) * 280)}, 95%, 55%)`;
+            ledBars.appendChild(bar);
+            barEls.push(bar);
+        }
+        const barLevels = new Float32Array(BAR_COUNT);
+        const barShown = new Float32Array(BAR_COUNT);
+        const barTarget = new Float32Array(BAR_COUNT);
+        const barVel = new Float32Array(noteMap.length);
+        const barAge = new Float32Array(noteMap.length);
+        const barHolds = new Int16Array(noteMap.length);
+        const timeline = { events: [], pointer: 0, endTick: 0, doneAt: 0, startTime: 0 };
+        let barsActive = false;
+        let barsRaf = 0;
+        let barsLast = 0;
+        let barsEnterTimer = null;
+
+        function renderBars(force) {
+            for (let i = 0; i < barEls.length; i++) {
+                const level = barLevels[i];
+                if (force || Math.abs(level - barShown[i]) > 0.002) {
+                    barShown[i] = level;
+                    barEls[i].style.transform = `scaleY(${Math.max(0.07, level).toFixed(3)})`;
+                }
+            }
+        }
+
+        function noteOn(index, velocity) {
+            barHolds[index]++;
+            barVel[index] = 0.4 + 0.6 * velocity;
+            barAge[index] = 0;
+            if (barHolds[index] === 1) setKeyPressed(noteMap[index], true);
+        }
+
+        function noteOff(index) {
+            if (barHolds[index] === 0) return;
+            barHolds[index]--;
+            if (barHolds[index] === 0) setKeyPressed(noteMap[index], false);
+        }
+
+        function enterBars() {
+            if (barsActive) return;
+            barsActive = true;
+            ledGrid.classList.add('show-bars');
+            renderBars(true);
+            ensureBarsLoop();
+        }
+
+        function exitBars() {
+            barsActive = false;
+            ledGrid.classList.remove('show-bars');
+        }
+
+        function finishSong() {
+            stopMIDI();
+        }
+
+        function processTimeline() {
+            if (!isPlaying) return;
+            const raw = Tone.getContext().rawContext;
+            const latency = Math.min(0.5, (raw.outputLatency || 0) + (raw.baseLatency || 0));
+            const time = raw.currentTime - latency;
+            if (time < timeline.startTime) return;
+            const tick = Tone.Transport.getTicksAtTime(time);
+            const events = timeline.events;
+            while (timeline.pointer < events.length && events[timeline.pointer].tick <= tick) {
+                const event = events[timeline.pointer];
+                timeline.pointer++;
+                if (event.on) noteOn(event.index, event.velocity);
+                else noteOff(event.index);
+            }
+            if (timeline.pointer >= events.length && tick >= timeline.endTick) {
+                if (!timeline.doneAt) timeline.doneAt = performance.now();
+                else if (performance.now() - timeline.doneAt > 700) finishSong();
+            }
+        }
+
+        function computeBarTargets() {
+            for (let i = 0; i < BAR_COUNT; i++) {
+                barTarget[i] = barHolds[i] > 0
+                    ? barVel[i] * (0.55 + 0.45 * Math.exp(-barAge[i] * 2.2))
+                    : 0;
+            }
+        }
+
+        function songTempo(song) {
+            let bpm = 120;
+            try {
+                const list = song.midi.header.tempos;
+                if (list && list.length && Number.isFinite(list[0].bpm)) bpm = list[0].bpm;
+            } catch (err) {
+                bpm = 120;
+            }
+            return Math.min(300, Math.max(40, Math.round(bpm)));
+        }
+
+        function syncTempoToCursor() {
+            const song = playlist[currentFileIndex];
+            if (isPlaying || scrollBusy || !song || song === tempoFor) return;
+            tempoFor = song;
+            tempo = songTempo(song);
+            try { Tone.Transport.bpm.value = tempo; } catch (err) {}
+        }
+
+        function noteToMidi(note) {
+            const m = /^([A-G]#?)(\d+)$/.exec(note);
+            if (!m) return lowestMidi;
+            return 12 * (parseInt(m[2], 10) + 1) + noteNames.indexOf(m[1]);
+        }
+
+        function barIndexOf(note) {
+            return noteIndex[mapMidiToNote(noteToMidi(note))];
+        }
+
+        function barNoteOn(index, velocity) {
+            if (index === undefined) return;
+            barHolds[index]++;
+            barVel[index] = 0.4 + 0.6 * velocity;
+            barAge[index] = 0;
+            enterBars();
+            ensureBarsLoop();
+        }
+
+        function barNoteOff(index) {
+            if (index === undefined || barHolds[index] === 0) return;
+            barHolds[index]--;
+        }
+
+        function barsTick(ts) {
+            const dt = Math.min(0.05, Math.max(0.001, (ts - barsLast) / 1000));
+            barsLast = ts;
+            processTimeline();
+            renderClock();
+
+            for (let i = 0; i < barHolds.length; i++) {
+                if (barHolds[i] > 0) barAge[i] += dt;
+            }
+            computeBarTargets();
+
+            let peak = 0;
+            for (let i = 0; i < BAR_COUNT; i++) {
+                const target = barTarget[i];
+                const rate = target > barLevels[i] ? 30 : 9;
+                let level = barLevels[i] + (target - barLevels[i]) * (1 - Math.exp(-dt * rate));
+                if (target === 0 && level < 0.004) level = 0;
+                barLevels[i] = level;
+                if (level > peak) peak = level;
+            }
+
+            if (barsActive) renderBars(false);
+
+            if (!isPlaying && peak < 0.01) {
+                barLevels.fill(0);
+                if (barsActive) {
+                    renderBars(true);
+                    exitBars();
+                }
+                barsRaf = 0;
+                return;
+            }
+            barsRaf = requestAnimationFrame(barsTick);
+        }
+
+        function ensureBarsLoop() {
+            if (barsRaf) return;
+            barsLast = performance.now();
+            barsRaf = requestAnimationFrame(barsTick);
+        }
+
+        async function initSynth() {
+            if (!synth) {
+                const limiter = new Tone.Limiter(-2).toDestination();
+                const volume = new Tone.Volume(-14).connect(limiter);
+                synth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: "square" },
+                    envelope: { attack: 0.005, decay: 0.08, sustain: 0.6, release: 0.12 }
+                }).connect(volume);
+                synth.maxPolyphony = 64;
+            }
+            await Tone.start();
+        }
+
+        function updateUI() {
+            const flashing = performance.now() < flashUntil;
+
+            if (!isPowerOn) {
+                if (!flashing) setTitle("SYS: OFFLINE");
+                lcdTempo.innerText = "---";
+                lcdFileIdx.innerText = "0000 / 0000";
+                lcdStatus.innerText = "STOP";
+                lcdStatus.classList.remove('playing');
+                lcdInd.classList.remove('playing');
+                renderRadio();
+                renderClock();
+                sysControls.forEach(el => el.classList.add('disabled'));
+                btnPower.classList.remove('active-power');
+                btnPlay.classList.remove('active-play');
+                clearTimeout(barsEnterTimer);
+                exitBars();
+                closeDoremi();
+                closeConfirm();
+                if (screenMode !== 'normal') setScreen('normal');
+                return;
+            }
+
+            sysControls.forEach(el => el.classList.remove('disabled'));
+            btnPower.classList.add('active-power');
+            syncTempoToCursor();
+            lcdTempo.innerText = `${tempo} BPM`;
+            lcdStatus.innerText = isPlaying ? "PLAY" : "STOP";
+            lcdStatus.classList.toggle('playing', isPlaying);
+            lcdInd.classList.toggle('playing', isPlaying);
+            renderRadio();
+            renderClock();
+
+            if (currentFileIndex >= playlist.length) currentFileIndex = 0;
+
+            if (playlist.length > 0) {
+                let shown = currentFileIndex;
+                if (isPlaying && queued && playingSong) {
+                    const at = playlist.indexOf(playingSong);
+                    if (at !== -1) shown = at;
+                }
+                if (!flashing) setTitle(playlist[shown].name.replace(/\.midi?$/i, ''));
+                lcdFileIdx.innerText = `${pad4(shown + 1)} / ${pad4(playlist.length)}`;
+            } else {
+                if (!flashing) setTitle("SYS: NO MIDI LOADED");
+                lcdFileIdx.innerText = "0000 / 0000";
+            }
+
+            if (screenMode === 'plist') renderPlaylist();
+            dmDrawRoll();
+        }
+
+        btnPower.addEventListener('click', async () => {
+            if (!isPowerOn) {
+                setTitle("BOOTING AUDIO...");
+                try {
+                    await initSynth();
+                    isPowerOn = true;
+                    Tone.Transport.bpm.value = tempo;
+                    updateUI();
+                    marqueeStart();
+                    logHistory('power', 'Power ON');
+                } catch (e) {
+                    setTitle("AUDIO INIT ERROR");
+                }
+            } else {
+                finishTake();
+                stopMIDI();
+                isPowerOn = false;
+                updateUI();
+                logHistory('power', 'Power OFF');
+            }
+        });
+
+        function triggerVisualPress(note) {
+            setKeyPressed(note, true);
+        }
+
+        function triggerVisualRelease(note) {
+            setKeyPressed(note, false);
+        }
+
+        let take = null;
+        let takeTimer = null;
+        const heldNotes = new Map();
+
+        function recordNoteOn(note) {
+            if (!take) {
+                take = { startedAt: performance.now(), date: Date.now(), events: [] };
+            }
+            clearTimeout(takeTimer);
+            const event = { note, t: Math.round(performance.now() - take.startedAt), d: 0 };
+            take.events.push(event);
+            heldNotes.set(note, event);
+        }
+
+        function recordNoteOff(note) {
+            if (!take) return;
+            const event = heldNotes.get(note);
+            if (event) {
+                event.d = Math.max(60, Math.round(performance.now() - take.startedAt - event.t));
+                heldNotes.delete(note);
+            }
+            if (heldNotes.size === 0) {
+                clearTimeout(takeTimer);
+                takeTimer = setTimeout(finishTake, 2500);
+            }
+        }
+
+        function finishTake() {
+            clearTimeout(takeTimer);
+            if (!take) return;
+            const finished = take;
+            take = null;
+            heldNotes.clear();
+            if (finished.events.length === 0) return;
+            finished.events.forEach(event => {
+                if (event.d === 0) event.d = 200;
+            });
+            dbAdd('takes', { at: finished.date, events: finished.events })
+                .then(id => logHistory('take', `Rekaman ${finished.events.length} nada`, id))
+                .catch(() => {});
+        }
+
+        function keyAt(x, y) {
+            const el = document.elementFromPoint(x, y);
+            return el ? el.closest('.white-key, .black-key, .hk-white, .hk-black') : null;
+        }
+
+        function pressKey(el) {
+            if (!el || !synth) return;
+            const note = el.dataset.note;
+            triggerVisualPress(note);
+            synth.triggerAttack(note, Tone.immediate());
+            recordNoteOn(note);
+            barNoteOn(barIndexOf(note), 0.85);
+        }
+
+        function releaseKey(el) {
+            if (!el || !synth) return;
+            const note = el.dataset.note;
+            triggerVisualRelease(note);
+            synth.triggerRelease([note], Tone.immediate());
+            recordNoteOff(note);
+            barNoteOff(barIndexOf(note));
+        }
+
+        function createScroller(options) {
+            const SPRING = 0.0006;
+            const DAMPING = 0.049;
+            const FRICTION = 360;
+            const RESISTANCE = 0.35;
+            const MAX_SPEED = 3.5;
+            const s = { y: 0, vy: 0, target: 0, raw: 0, mode: 'idle', raf: 0, last: 0, dragging: false, samples: [] };
+
+            function limit() {
+                return Math.max(0, options.max());
+            }
+
+            function clampY(y, max) {
+                return Math.min(max, Math.max(0, y));
+            }
+
+            function overshoot(y, max) {
+                if (y < 0) return y;
+                if (y > max) return y - max;
+                return 0;
+            }
+
+            function fromRaw(raw, max) {
+                if (raw < 0) return raw * RESISTANCE;
+                if (raw > max) return max + (raw - max) * RESISTANCE;
+                return raw;
+            }
+
+            function toRaw(y, max) {
+                if (y < 0) return y / RESISTANCE;
+                if (y > max) return max + (y - max) / RESISTANCE;
+                return y;
+            }
+
+            function show() {
+                options.render(s.y);
+            }
+
+            function frame(ts) {
+                s.raf = 0;
+                if (s.mode === 'idle') return;
+                const dt = Math.min(32, Math.max(1, ts - s.last));
+                s.last = ts;
+                const max = limit();
+                if (s.mode === 'glide') {
+                    s.target = clampY(s.target, max);
+                    s.y += (s.target - s.y) * (1 - Math.exp(-dt / 110));
+                    if (Math.abs(s.target - s.y) < 0.25) {
+                        s.y = s.target;
+                        s.mode = 'idle';
+                    }
+                } else {
+                    const over = overshoot(s.y, max);
+                    if (over !== 0) s.vy += (-over * SPRING - s.vy * DAMPING) * dt;
+                    else s.vy *= Math.exp(-dt / FRICTION);
+                    s.y += s.vy * dt;
+                    const after = overshoot(s.y, max);
+                    const settledOut = after !== 0 && Math.abs(after) < 0.4 && Math.abs(s.vy) < 0.02;
+                    const settledIn = after === 0 && Math.abs(s.vy) < 0.015;
+                    if (settledOut || settledIn) {
+                        s.y = clampY(s.y, max);
+                        s.vy = 0;
+                        s.mode = 'idle';
+                    }
+                }
+                show();
+                if (s.mode !== 'idle') s.raf = requestAnimationFrame(frame);
+            }
+
+            function run() {
+                if (s.raf) return;
+                s.last = performance.now();
+                s.raf = requestAnimationFrame(frame);
+            }
+
+            s.stop = function () {
+                s.mode = 'idle';
+                s.vy = 0;
+                s.dragging = false;
+            };
+
+            s.jump = function (y) {
+                s.mode = 'idle';
+                s.vy = 0;
+                s.y = clampY(y, limit());
+                show();
+            };
+
+            s.glide = function (target) {
+                const t = clampY(target, limit());
+                if (Math.abs(t - s.y) < 0.5) {
+                    s.jump(t);
+                    return;
+                }
+                s.target = t;
+                s.vy = 0;
+                s.mode = 'glide';
+                run();
+            };
+
+            s.nudge = function (dy) {
+                s.glide((s.mode === 'glide' ? s.target : s.y) + dy);
+            };
+
+            s.settle = function () {
+                if (s.dragging || s.mode !== 'idle') return;
+                const y = clampY(s.y, limit());
+                if (y !== s.y) {
+                    s.y = y;
+                    show();
+                }
+            };
+
+            s.dragStart = function () {
+                s.mode = 'idle';
+                s.vy = 0;
+                s.dragging = true;
+                s.raw = toRaw(s.y, limit());
+                s.samples = [{ t: performance.now(), y: s.y }];
+            };
+
+            s.dragBy = function (dy) {
+                if (!s.dragging) return;
+                s.raw += dy;
+                s.y = fromRaw(s.raw, limit());
+                const now = performance.now();
+                s.samples.push({ t: now, y: s.y });
+                while (s.samples.length > 2 && now - s.samples[0].t > 100) s.samples.shift();
+                show();
+            };
+
+            s.dragEnd = function () {
+                if (!s.dragging) return;
+                s.dragging = false;
+                const now = performance.now();
+                const first = s.samples[0];
+                const last = s.samples[s.samples.length - 1];
+                let v = 0;
+                if (first && last && last.t > first.t && now - last.t < 80) v = (last.y - first.y) / (last.t - first.t);
+                s.vy = Math.min(MAX_SPEED, Math.max(-MAX_SPEED, v));
+                s.mode = 'fling';
+                run();
+            };
+
+            s.dragCancel = function () {
+                s.dragging = false;
+                s.vy = 0;
+                if (overshoot(s.y, limit()) !== 0) {
+                    s.mode = 'fling';
+                    run();
+                } else {
+                    s.mode = 'idle';
+                }
+            };
+
+            return s;
+        }
+
+        const doremiScreen = document.getElementById('doremi-screen');
+        const dmHead = document.getElementById('dm-head');
+        const dmRoll = document.getElementById('dm-roll');
+        const dmContent = document.getElementById('dm-content');
+        const dmLanes = document.getElementById('dm-lanes');
+        const dmRange = document.getElementById('dm-range');
+        const dmThumb = document.getElementById('dm-thumb');
+        const dmCanvas = document.getElementById('dm-canvas');
+        const dmCtx = dmCanvas.getContext('2d');
+        const dmModeH = document.getElementById('dm-mode-h');
+        const dmModeV = document.getElementById('dm-mode-v');
+        const DM_ROWS = allNotes.length;
+        const DM_MIN_ROW = 8;
+        const DM_MAX_ROW = 72;
+        const DM_SLOP = 7;
+        const DM_BEATS = 8;
+        const dm = { mode: 'v', row: 28, keyW: 96, base: 0, count: DM_ROWS, minRow: DM_MIN_ROW, fitSong: null, init: false, pointers: new Map(), pinch: null, head: null, thumbTimer: null };
+        const dmDraw = { w: 0, h: 0, dpr: 1, cache: new WeakMap(), loop: 0 };
+        const dmRowOf = {};
+        allNotes.forEach((note, i) => { dmRowOf[note] = DM_ROWS - 1 - i; });
+
+        dmContent.style.setProperty('--dm-count', DM_ROWS);
+
+        (function buildLanes() {
+            const pattern = [false, true, false, true, false, true, false, false, true, false, true, false];
+            const stops = pattern.map((black, i) => `${black ? '#171a22' : '#252936'} calc(var(--dm-row) * ${i}) calc(var(--dm-row) * ${i + 1})`).join(', ');
+            dmLanes.style.backgroundImage = [
+                'linear-gradient(to bottom, transparent calc(var(--dm-row) - 1px), rgba(0, 0, 0, 0.55) calc(var(--dm-row) - 1px))',
+                'linear-gradient(to bottom, transparent calc(var(--dm-row) * 12 - 2px), rgba(255, 255, 255, 0.2) calc(var(--dm-row) * 12 - 2px))',
+                `linear-gradient(to bottom, ${stops})`
+            ].join(', ');
+            dmLanes.style.backgroundSize = '100% var(--dm-row), 100% calc(var(--dm-row) * 12), 100% calc(var(--dm-row) * 12)';
+            dmLanes.style.backgroundPosition = '0 0, 0 var(--dm-row), 0 var(--dm-row)';
+        })();
+
+        function dmViewHeight() {
+            return dmRoll.clientHeight;
+        }
+
+        function dmMaxScroll() {
+            return Math.max(0, dm.count * dm.row - dmViewHeight());
+        }
+
+        function dmNoteAtRow(index) {
+            return allNotes[DM_ROWS - 1 - index];
+        }
+
+        function dmRowAtClientY(clientY) {
+            const rect = dmRoll.getBoundingClientRect();
+            const index = Math.floor((dmScroller.y + clientY - rect.top) / dm.row) + dm.base;
+            return Math.max(dm.base, Math.min(dm.base + dm.count - 1, index));
+        }
+
+        function dmUpdateInfo(y) {
+            if (dm.mode !== 'v') return;
+            const view = dmViewHeight();
+            const contentHeight = dm.count * dm.row;
+            if (!view) return;
+            const lastRow = dm.base + dm.count - 1;
+            const top = Math.max(dm.base, Math.min(lastRow, Math.floor(y / dm.row) + dm.base));
+            const bottom = Math.max(dm.base, Math.min(lastRow, Math.ceil((y + view) / dm.row) - 1 + dm.base));
+            dmRange.textContent = `${dmNoteAtRow(bottom)} - ${dmNoteAtRow(top)}`;
+            const thumbHeight = Math.min(view, Math.max(24, view * view / contentHeight));
+            const max = dmMaxScroll();
+            const ratio = max > 0 ? Math.min(1, Math.max(0, y / max)) : 0;
+            dmThumb.style.height = thumbHeight + 'px';
+            dmThumb.style.transform = `translateY(${ratio * (view - thumbHeight)}px)`;
+            dmThumb.classList.add('show');
+            clearTimeout(dm.thumbTimer);
+            dm.thumbTimer = setTimeout(() => dmThumb.classList.remove('show'), 700);
+        }
+
+        const dmScroller = createScroller({
+            max: dmMaxScroll,
+            render: (y) => {
+                dmContent.style.transform = `translate3d(0, ${-(y + dm.base * dm.row)}px, 0)`;
+                dmUpdateInfo(y);
+                dmDrawRoll();
+            }
+        });
+
+        function dmApplyRow(row) {
+            dm.row = Math.min(DM_MAX_ROW, Math.max(dm.minRow, row));
+            dm.keyW = Math.min(170, Math.max(64, dm.row * 3.4));
+            dmContent.style.setProperty('--dm-row', dm.row + 'px');
+            dmContent.style.setProperty('--dm-key-w', dm.keyW + 'px');
+            dmContent.classList.toggle('dm-fine', dm.row >= 20);
+        }
+
+        function dmUpdateMin() {
+            const view = dmViewHeight();
+            dm.minRow = view > 0 ? Math.min(DM_MAX_ROW, view / dm.count) : DM_MIN_ROW;
+        }
+
+        function dmFit(song) {
+            const view = dmViewHeight();
+            if (!view) return;
+            dm.fitSong = song;
+            let top = Infinity;
+            let bottom = -1;
+            if (song) {
+                songBlocks(song).list.forEach(b => {
+                    if (typeof b.row !== 'number' || isNaN(b.row)) return;
+                    if (b.row < top) top = b.row;
+                    if (b.row > bottom) bottom = b.row;
+                });
+            }
+            if (bottom < 0) {
+                dm.base = 0;
+                dm.count = DM_ROWS;
+                dm.minRow = DM_MIN_ROW;
+                dmApplyRow(Math.min(40, Math.max(18, view / 12)));
+                const middle = (DM_ROWS - 1 - allNotes.indexOf('C4') + 0.5) * dm.row;
+                dmScroller.jump(middle - view / 2);
+                return;
+            }
+            dm.base = top;
+            dm.count = bottom - top + 1;
+            dmUpdateMin();
+            dmApplyRow(view / dm.count);
+            dmScroller.jump(0);
+        }
+
+        function dmZoomTo(row, anchorY, anchorRows) {
+            dmApplyRow(row);
+            dmScroller.jump(anchorRows * dm.row - anchorY);
+        }
+
+        function dmPair() {
+            const list = Array.from(dm.pointers.values());
+            return list.length === 2 ? list : null;
+        }
+
+        function dmPreview(clientY) {
+            const el = document.getElementById(keyId(dmNoteAtRow(dmRowAtClientY(clientY))));
+            pressKey(el);
+            setTimeout(() => releaseKey(el), 260);
+        }
+
+        function dmSizeCanvas() {
+            const w = dmRoll.clientWidth;
+            const h = dmRoll.clientHeight;
+            const dpr = Math.min(2, window.devicePixelRatio || 1);
+            if (w === dmDraw.w && h === dmDraw.h && dpr === dmDraw.dpr) return;
+            dmDraw.w = w;
+            dmDraw.h = h;
+            dmDraw.dpr = dpr;
+            dmCanvas.width = Math.max(1, Math.round(w * dpr));
+            dmCanvas.height = Math.max(1, Math.round(h * dpr));
+            dmCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        function songBlocks(song) {
+            let entry = dmDraw.cache.get(song);
+            if (entry) return entry;
+            const list = [];
+            let maxDur = 0;
+            let ppq = 480;
+            try {
+                const midi = song.midi;
+                ppq = (midi.header && midi.header.ppq) || 480;
+                midi.tracks.forEach(track => {
+                    track.notes.forEach(note => {
+                        const row = dmRowOf[mapMidiToNote(note.midi)];
+                        const dur = Math.max(1, note.durationTicks);
+                        list.push({ tick: note.ticks, dur, row });
+                        if (dur > maxDur) maxDur = dur;
+                    });
+                });
+            } catch (err) {}
+            list.sort((a, b) => a.tick - b.tick);
+            entry = { list, maxDur, ppq };
+            dmDraw.cache.set(song, entry);
+            return entry;
+        }
+
+        function dmCurrentTick() {
+            if (!isPlaying) return 0;
+            try {
+                const raw = Tone.getContext().rawContext;
+                const latency = Math.min(0.5, (raw.outputLatency || 0) + (raw.baseLatency || 0));
+                const time = raw.currentTime - latency;
+                if (time < timeline.startTime) return 0;
+                return Math.max(0, Tone.Transport.getTicksAtTime(time));
+            } catch (err) {
+                return 0;
+            }
+        }
+
+        function dmBlockPath(x, y, w, h) {
+            dmCtx.beginPath();
+            if (dmCtx.roundRect) dmCtx.roundRect(x, y, w, h, 2);
+            else dmCtx.rect(x, y, w, h);
+        }
+
+        function dmDrawRoll() {
+            if (dm.mode !== 'v' || !doremiScreen.classList.contains('shown')) return;
+            dmSizeCanvas();
+            const w = dmDraw.w;
+            const h = dmDraw.h;
+            dmCtx.clearRect(0, 0, w, h);
+            const song = playingSong || playlist[currentFileIndex];
+            if (!song) return;
+            if (dm.fitSong !== song) {
+                dmFit(song);
+                return;
+            }
+            const data = songBlocks(song);
+            const keyW = dm.keyW;
+            const laneW = w - keyW;
+            if (laneW <= 0 || !data.list.length) return;
+            const pxPerTick = (laneW / DM_BEATS) / data.ppq;
+            const now = dmCurrentTick();
+            const endTick = now + laneW / pxPerTick;
+            const rowH = dm.row;
+            const scrollY = dmScroller.y;
+            const list = data.list;
+            let lo = 0;
+            let hi = list.length;
+            const minTick = now - data.maxDur;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (list[mid].tick < minTick) lo = mid + 1;
+                else hi = mid;
+            }
+            dmCtx.save();
+            dmCtx.beginPath();
+            dmCtx.rect(keyW, 0, laneW, h);
+            dmCtx.clip();
+            for (let i = lo; i < list.length; i++) {
+                const b = list[i];
+                if (b.tick > endTick) break;
+                const bw = Math.max(2, b.dur * pxPerTick - 1);
+                const x = keyW + (b.tick - now) * pxPerTick;
+                if (x + bw < keyW) continue;
+                const y = (b.row - dm.base) * rowH - scrollY;
+                if (y + rowH < 0 || y > h) continue;
+                const active = b.tick <= now && now < b.tick + b.dur;
+                dmBlockPath(x, y + 1, bw, rowH - 2);
+                dmCtx.fillStyle = active ? '#ffd24d' : '#3fa9f5';
+                dmCtx.fill();
+                dmCtx.strokeStyle = active ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.28)';
+                dmCtx.lineWidth = 1;
+                dmCtx.stroke();
+            }
+            dmCtx.restore();
+        }
+
+        function dmLoopFrame() {
+            dmDraw.loop = 0;
+            dmDrawRoll();
+            if (isPlaying && dm.mode === 'v' && doremiScreen.classList.contains('shown')) {
+                dmDraw.loop = requestAnimationFrame(dmLoopFrame);
+            }
+        }
+
+        function dmEnsureLoop() {
+            if (dmDraw.loop || !isPlaying || dm.mode !== 'v' || !doremiScreen.classList.contains('shown')) return;
+            dmDraw.loop = requestAnimationFrame(dmLoopFrame);
+        }
+
+        const hzScroll = document.getElementById('hz-scroll');
+        const hzKeys = document.getElementById('hz-keys');
+        const hzNav = document.getElementById('hz-nav');
+        const hzThumb = document.getElementById('hz-nthumb');
+        const whiteNotes = allNotes.filter(note => !note.includes('#'));
+        const hz = { x: 0, init: false, pointers: new Map() };
+
+        (function buildHzTicks() {
+            for (let octave = 0; octave <= 10; octave++) {
+                const tick = document.createElement('div');
+                tick.className = 'hz-tick';
+                tick.style.left = (octave * 7 / whiteNotes.length * 100) + '%';
+                tick.textContent = 'C' + octave;
+                hzNav.appendChild(tick);
+            }
+        })();
+
+        function hzKeyWidth() {
+            return hzScroll.clientWidth / 36;
+        }
+
+        function hzTotalWidth() {
+            return hzKeyWidth() * whiteNotes.length;
+        }
+
+        const hzScroller = createScroller({
+            max: () => Math.max(0, hzTotalWidth() - hzScroll.clientWidth),
+            render: (value) => {
+                const x = Math.min(Math.max(0, hzTotalWidth() - hzScroll.clientWidth), Math.max(0, value));
+                hz.x = x;
+                hzKeys.style.transform = `translate3d(${-x}px, 0, 0)`;
+                hzUpdate();
+            }
+        });
+
+        let hzThumbW = -1;
+        let hzLastRange = '';
+
+        function hzUpdate() {
+            const cw = hzScroll.clientWidth;
+            if (!cw) return;
+            const kw = cw / 36;
+            hz.kwPrev = kw;
+            const thumbW = cw / (kw * whiteNotes.length) * 100;
+            if (thumbW !== hzThumbW) {
+                hzThumbW = thumbW;
+                hzThumb.style.width = thumbW + '%';
+            }
+            hzThumb.style.transform = `translate3d(${hz.x / cw * 100}%, 0, 0)`;
+            if (dm.mode !== 'h') return;
+            const first = Math.min(whiteNotes.length - 1, Math.max(0, Math.round(hz.x / kw)));
+            const last = Math.min(whiteNotes.length - 1, first + Math.round(cw / kw) - 1);
+            const text = `${whiteNotes[first]} - ${whiteNotes[last]}`;
+            if (text !== hzLastRange) {
+                hzLastRange = text;
+                dmRange.textContent = text;
+            }
+        }
+
+        hzScroll.addEventListener('pointerdown', (e) => {
+            if (!isPowerOn || !synth) return;
+            e.preventDefault();
+            hzScroll.setPointerCapture(e.pointerId);
+            const el = keyAt(e.clientX, e.clientY);
+            hz.pointers.set(e.pointerId, { el });
+            pressKey(el);
+        });
+
+        hzScroll.addEventListener('pointermove', (e) => {
+            const p = hz.pointers.get(e.pointerId);
+            if (!p) return;
+            const el = keyAt(e.clientX, e.clientY);
+            if (el === p.el) return;
+            releaseKey(p.el);
+            p.el = el;
+            pressKey(el);
+        });
+
+        function hzEndPointer(e) {
+            const p = hz.pointers.get(e.pointerId);
+            if (!p) return;
+            releaseKey(p.el);
+            hz.pointers.delete(e.pointerId);
+        }
+
+        hzScroll.addEventListener('pointerup', hzEndPointer);
+        hzScroll.addEventListener('pointercancel', hzEndPointer);
+        hzScroll.addEventListener('lostpointercapture', hzEndPointer);
+        hzScroll.addEventListener('contextmenu', (e) => e.preventDefault());
+        let hzNavDragging = false;
+        let hzNavLast = 0;
+        let hzNavWidth = 1;
+
+        function hzNavEnd() {
+            if (!hzNavDragging) return;
+            hzNavDragging = false;
+            hzScroller.dragEnd();
+        }
+
+        function hzNavAbort() {
+            if (!hzNavDragging) return;
+            hzNavDragging = false;
+            hzScroller.dragCancel();
+        }
+
+        hzNav.addEventListener('pointerdown', (e) => {
+            hzNavDragging = true;
+            hzNav.setPointerCapture(e.pointerId);
+            hzNavLast = e.clientX;
+            hzNavWidth = hzNav.getBoundingClientRect().width || 1;
+            hzScroller.dragStart();
+        });
+        hzNav.addEventListener('pointermove', (e) => {
+            if (!hzNavDragging) return;
+            const dx = e.clientX - hzNavLast;
+            hzNavLast = e.clientX;
+            hzScroller.dragBy(dx / hzNavWidth * hzTotalWidth());
+        });
+        hzNav.addEventListener('pointerup', hzNavEnd);
+        hzNav.addEventListener('pointercancel', hzNavAbort);
+
+        const dmSheet = { y: 0, dir: 'up', raf: 0 };
+
+        function dmSheetHeight() {
+            return doremiScreen.clientHeight || 1;
+        }
+
+        function dmSheetApply() {
+            const h = dmSheetHeight();
+            doremiScreen.style.transform = `translate3d(0, ${dmSheet.y}px, 0)`;
+            const fade = dmSheet.dir === 'down' ? Math.min(1, Math.max(0, (h - dmSheet.y) / 5)) : 1;
+            doremiScreen.style.opacity = String(fade);
+        }
+
+        function dmSheetStop() {
+            cancelAnimationFrame(dmSheet.raf);
+            dmSheet.raf = 0;
+        }
+
+        function dmSheetTo(target, dir, onDone) {
+            dmSheetStop();
+            dmSheet.dir = dir;
+            const from = dmSheet.y;
+            const distance = target - from;
+            const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const share = Math.max(0.35, Math.min(1, Math.abs(distance) / dmSheetHeight()));
+            const duration = reduce || Math.abs(distance) < 1 ? 0 : (dir === 'down' ? 360 : 480) * share;
+            if (!duration) {
+                dmSheet.y = target;
+                dmSheetApply();
+                if (onDone) onDone();
+                return;
+            }
+            const t0 = performance.now();
+            const step = (now) => {
+                const t = Math.min(1, (now - t0) / duration);
+                const eased = dir === 'down' ? Math.pow(t, 2.2) : 1 - Math.pow(1 - t, 4);
+                dmSheet.y = from + distance * eased;
+                dmSheetApply();
+                if (t < 1) {
+                    dmSheet.raf = requestAnimationFrame(step);
+                } else {
+                    dmSheet.raf = 0;
+                    if (onDone) onDone();
+                }
+            };
+            dmSheet.raf = requestAnimationFrame(step);
+        }
+
+        function dmInitView() {
+            const view = dmViewHeight();
+            const song = playingSong || playlist[currentFileIndex];
+            if (view > 0 && (!dm.init || dm.fitSong !== song)) {
+                dm.init = true;
+                dmFit(song);
+            } else {
+                dmUpdateMin();
+                dmApplyRow(dm.row);
+                dmScroller.jump(dmScroller.y);
+            }
+            dmSizeCanvas();
+            dmDrawRoll();
+            dmEnsureLoop();
+        }
+
+        function hzInitView() {
+            if (!hz.init && hzScroll.clientWidth > 0) {
+                hz.init = true;
+                hzScroller.jump(whiteNotes.indexOf('C1') * hzKeyWidth());
+            }
+            hzUpdate();
+        }
+
+        function dmReleaseAll() {
+            dm.pointers.forEach(p => releaseKey(p.el));
+            dm.pointers.clear();
+            dm.pinch = null;
+            dm.head = null;
+            hz.pointers.forEach(p => releaseKey(p.el));
+            hz.pointers.clear();
+            hzScroller.stop();
+            dmScroller.stop();
+        }
+
+        function setDoremiMode(mode) {
+            if (dm.mode === mode) return;
+            dmReleaseAll();
+            dm.mode = mode;
+            doremiScreen.classList.toggle('mode-h', mode === 'h');
+            doremiScreen.classList.toggle('mode-v', mode === 'v');
+            dmModeH.classList.toggle('on', mode === 'h');
+            dmModeV.classList.toggle('on', mode === 'v');
+            requestAnimationFrame(() => {
+                if (mode === 'h') hzInitView();
+                else dmInitView();
+            });
+        }
+
+        function openDoremi() {
+            if (!isPowerOn || doremiScreen.classList.contains('open')) return;
+            if (!doremiScreen.classList.contains('shown')) {
+                dmSheet.y = dmSheetHeight();
+                dmSheet.dir = 'up';
+                dmSheetApply();
+            }
+            doremiScreen.classList.add('shown', 'open');
+            requestAnimationFrame(() => {
+                if (dm.mode === 'h') hzInitView();
+                else dmInitView();
+            });
+            dmSheetTo(0, 'up');
+        }
+
+        function closeDoremi() {
+            if (!doremiScreen.classList.contains('open')) return;
+            doremiScreen.classList.remove('open');
+            dmReleaseAll();
+            dmSheetTo(dmSheetHeight(), 'down', () => {
+                if (!doremiScreen.classList.contains('open')) doremiScreen.classList.remove('shown');
+            });
+        }
+
+        dmRoll.addEventListener('pointerdown', (e) => {
+            if (!isPowerOn || !synth) return;
+            e.preventDefault();
+            try { dmRoll.setPointerCapture(e.pointerId); } catch (err) {}
+            if (dm.pointers.size >= 2) return;
+            const onKeys = !!e.target.closest('.dm-keys');
+            const p = {
+                zone: onKeys ? 'keys' : 'grid',
+                el: null,
+                x: e.clientX,
+                y: e.clientY,
+                sx: e.clientX,
+                sy: e.clientY,
+                ly: e.clientY,
+                moved: false,
+                locked: false
+            };
+            dm.pointers.set(e.pointerId, p);
+            const pair = dmPair();
+            if (pair) {
+                dmScroller.dragCancel();
+                pair.forEach(q => { if (q.zone === 'grid') q.locked = true; });
+                dm.pinch = {
+                    active: false,
+                    d0: Math.max(1, Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y)),
+                    row0: dm.row,
+                    anchorRows: 0
+                };
+            }
+            if (onKeys) {
+                p.el = keyAt(e.clientX, e.clientY);
+                pressKey(p.el);
+            } else if (!pair) {
+                dmScroller.dragStart();
+            }
+        });
+
+        dmRoll.addEventListener('pointermove', (e) => {
+            const p = dm.pointers.get(e.pointerId);
+            if (!p) return;
+            p.x = e.clientX;
+            p.y = e.clientY;
+            const pair = dmPair();
+            if (pair && dm.pinch) {
+                const d = Math.max(1, Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y));
+                const rect = dmRoll.getBoundingClientRect();
+                const midY = (pair[0].y + pair[1].y) / 2 - rect.top;
+                const bothMoved = pair.every(q => Math.hypot(q.x - q.sx, q.y - q.sy) > 6);
+                if (!dm.pinch.active && bothMoved && Math.abs(d - dm.pinch.d0) > 12) {
+                    dm.pinch.active = true;
+                    pair.forEach(q => {
+                        releaseKey(q.el);
+                        q.el = null;
+                        q.locked = true;
+                    });
+                    dm.pinch.d0 = d;
+                    dm.pinch.row0 = dm.row;
+                    dm.pinch.anchorRows = (dmScroller.y + midY) / dm.row;
+                }
+                if (dm.pinch.active) {
+                    dmZoomTo(dm.pinch.row0 * d / dm.pinch.d0, midY, dm.pinch.anchorRows);
+                    return;
+                }
+            }
+            if (p.locked) return;
+            if (p.zone === 'keys') {
+                const el = keyAt(e.clientX, e.clientY);
+                if (el === p.el) return;
+                releaseKey(p.el);
+                p.el = el;
+                pressKey(el);
+                return;
+            }
+            if (!p.moved) {
+                if (Math.hypot(p.x - p.sx, p.y - p.sy) < DM_SLOP) return;
+                p.moved = true;
+                p.ly = p.y;
+                return;
+            }
+            dmScroller.dragBy(p.ly - p.y);
+            p.ly = p.y;
+        });
+
+        function dmEndPointer(e) {
+            const p = dm.pointers.get(e.pointerId);
+            if (!p) return;
+            dm.pointers.delete(e.pointerId);
+            if (p.zone === 'keys') {
+                releaseKey(p.el);
+            } else if (!p.locked) {
+                if (p.moved) {
+                    dmScroller.dragEnd();
+                } else {
+                    dmScroller.dragCancel();
+                    if (e.type === 'pointerup') dmPreview(p.y);
+                }
+            }
+            if (dm.pointers.size < 2) {
+                if (dm.pinch && dm.pinch.active) dm.pointers.forEach(q => { q.locked = true; });
+                dm.pinch = null;
+            }
+        }
+
+        dmRoll.addEventListener('pointerup', dmEndPointer);
+        dmRoll.addEventListener('pointercancel', dmEndPointer);
+        dmRoll.addEventListener('lostpointercapture', dmEndPointer);
+        dmRoll.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        dmRoll.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            if (e.ctrlKey) {
+                const rect = dmRoll.getBoundingClientRect();
+                const anchorY = e.clientY - rect.top;
+                const anchorRows = (dmScroller.y + anchorY) / dm.row;
+                dmZoomTo(dm.row * Math.exp(-e.deltaY * 0.01), anchorY, anchorRows);
+            } else {
+                dmScroller.nudge(e.deltaY);
+            }
+        }, { passive: false });
+
+        dmHead.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('button') || dm.head) return;
+            dm.head = {
+                id: e.pointerId,
+                x0: e.clientX,
+                y0: e.clientY,
+                axis: null,
+                row0: dm.row,
+                anchorRows: (dmScroller.y + dmViewHeight() / 2) / dm.row,
+                sy0: dmSheet.y,
+                samples: [{ t: performance.now(), y: dmSheet.y }]
+            };
+            try { dmHead.setPointerCapture(e.pointerId); } catch (err) {}
+        });
+
+        dmHead.addEventListener('pointermove', (e) => {
+            const g = dm.head;
+            if (!g || e.pointerId !== g.id) return;
+            const dx = e.clientX - g.x0;
+            const dy = e.clientY - g.y0;
+            if (!g.axis) {
+                if (Math.hypot(dx, dy) < 8) return;
+                g.axis = (Math.abs(dy) > Math.abs(dx) || dm.mode !== 'v') ? 'sheet' : 'zoom';
+                if (g.axis === 'sheet') dmSheetStop();
+            }
+            if (g.axis === 'zoom') {
+                dmZoomTo(g.row0 * Math.exp(dx * 0.0055), dmViewHeight() / 2, g.anchorRows);
+                return;
+            }
+            const next = Math.min(dmSheetHeight(), Math.max(0, g.sy0 + dy));
+            if (next > dmSheet.y) dmSheet.dir = 'down';
+            else if (next < dmSheet.y) dmSheet.dir = 'up';
+            dmSheet.y = next;
+            dmSheetApply();
+            const now = performance.now();
+            g.samples.push({ t: now, y: next });
+            while (g.samples.length > 2 && now - g.samples[0].t > 120) g.samples.shift();
+        });
+
+        function dmEndHead(e) {
+            const g = dm.head;
+            if (!g || e.pointerId !== g.id) return;
+            dm.head = null;
+            if (g.axis !== 'sheet') return;
+            const first = g.samples[0];
+            const last = g.samples[g.samples.length - 1];
+            const v = last.t > first.t ? (last.y - first.y) / (last.t - first.t) : 0;
+            if (e.type === 'pointerup' && (dmSheet.y > dmSheetHeight() * 0.3 || v > 0.6)) closeDoremi();
+            else dmSheetTo(0, 'up');
+        }
+
+        dmHead.addEventListener('pointerup', dmEndHead);
+        dmHead.addEventListener('pointercancel', dmEndHead);
+        dmHead.addEventListener('lostpointercapture', dmEndHead);
+
+        btnDoremi.addEventListener('click', openDoremi);
+        dmModeH.addEventListener('click', () => setDoremiMode('h'));
+        dmModeV.addEventListener('click', () => setDoremiMode('v'));
+        document.getElementById('dm-close').addEventListener('click', closeDoremi);
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDoremi(); });
+        window.addEventListener('resize', () => {
+            if (dm.fitSong) {
+                dmFit(dm.fitSong);
+            } else {
+                dmUpdateMin();
+                dmApplyRow(dm.row);
+                dmScroller.jump(dmScroller.y);
+            }
+            if (hz.kwPrev) hzScroller.jump(hzScroller.y * hzKeyWidth() / hz.kwPrev);
+            else hzScroller.jump(hzScroller.y);
+            dmSizeCanvas();
+            dmDrawRoll();
+            if (doremiScreen.classList.contains('open') && !dmSheet.raf && !dm.head) {
+                dmSheet.y = 0;
+                dmSheetApply();
+            }
+        });
+
+        let tempoLogTimer = null;
+
+        function afterTempoChange() {
+            Tone.Transport.bpm.value = tempo;
+            saveSettings();
+            updateUI();
+            clearTimeout(tempoLogTimer);
+            tempoLogTimer = setTimeout(() => logHistory('tempo', `Tempo ${tempo} BPM`, tempo), 1200);
+        }
+
+        btnTempPlus.addEventListener('click', () => {
+            if (!isPowerOn) return;
+            if (tempo + 5 > 300) return;
+            tempo += 5;
+            afterTempoChange();
+        });
+
+        btnTempMinus.addEventListener('click', () => {
+            if (!isPowerOn) return;
+            if (tempo - 5 < 40) return;
+            tempo -= 5;
+            afterTempoChange();
+        });
+
+        btnUpload.addEventListener('click', () => {
+            if (!isPowerOn) return;
+            midiInput.click();
+        });
+
+        const confirmState = { open: false, yes: false, song: null };
+        const lcdConfirm = document.getElementById('lcd-confirm');
+        const lcdDlgMsg = document.getElementById('lcd-dlg-msg');
+        const lcdDlgYes = document.getElementById('lcd-dlg-yes');
+        const lcdDlgNo = document.getElementById('lcd-dlg-no');
+
+        const lcdDlgSlider = document.getElementById('lcd-dlg-slider');
+        let confirmPrev = null;
+
+        function renderConfirm() {
+            lcdDlgYes.classList.toggle('sel', confirmState.yes);
+            lcdDlgNo.classList.toggle('sel', !confirmState.yes);
+            lcdDlgSlider.classList.toggle('right', !confirmState.yes);
+            if (confirmPrev !== null && confirmPrev !== confirmState.yes) {
+                lcdDlgSlider.classList.remove('move');
+                void lcdDlgSlider.offsetWidth;
+                lcdDlgSlider.classList.add('move');
+            }
+            confirmPrev = confirmState.yes;
+        }
+
+        function setConfirmChoice(yes) {
+            confirmState.yes = yes;
+            renderConfirm();
+        }
+
+        function openConfirm(song) {
+            holdStop();
+            confirmState.open = true;
+            confirmState.yes = false;
+            confirmState.song = song;
+            confirmPrev = null;
+            lcdDlgSlider.classList.remove('move');
+            lcdDlgMsg.textContent = 'Apakah Anda Yakin Untuk Menghapus Nada ' + song.name.replace(/\.midi?$/i, '') + '?';
+            renderConfirm();
+            lcdConfirm.classList.add('open');
+        }
+
+        function closeConfirm() {
+            confirmState.open = false;
+            confirmState.song = null;
+            lcdConfirm.classList.remove('open');
+        }
+
+        function deleteSong(song) {
+            if (song === playingSong) stopMIDI();
+            if (song.cloud) {
+                hiddenCloud.add(song.id);
+                saveHiddenCloud();
+            } else {
+                dbDelete('songs', song.id).catch(() => {});
+            }
+            playlist = playlist.filter(item => item !== song);
+            rebuildPlaylist();
+            saveSettings();
+            updateUI();
+            flashTrack("REMOVED", 1200);
+        }
+
+        function removeCurrentSong() {
+            if (!isPowerOn) return;
+            if (confirmState.open) {
+                const song = confirmState.song;
+                const yes = confirmState.yes;
+                closeConfirm();
+                if (yes && song) deleteSong(song);
+                return;
+            }
+            const song = playlist[currentFileIndex];
+            if (!song) {
+                flashTrack("NO MIDI DATA", 1500);
+                return;
+            }
+            openConfirm(song);
+        }
+
+        btnRemove.addEventListener('click', removeCurrentSong);
+        lcdDlgYes.addEventListener('click', () => {
+            if (!confirmState.open) return;
+            confirmState.yes = true;
+            removeCurrentSong();
+        });
+        lcdDlgNo.addEventListener('click', () => {
+            if (!confirmState.open) return;
+            confirmState.yes = false;
+            removeCurrentSong();
+        });
+
+        function isMidiFile(file) {
+            return /\.(mid|midi)$/i.test(file.name) || /midi/i.test(file.type);
+        }
+
+        function isImageFile(file) {
+            return file.type.startsWith('image') || /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif|svg)$/i.test(file.name);
+        }
+
+        let uploadTimer = null;
+
+        function startUploading() {
+            clearInterval(uploadTimer);
+            let step = 0;
+            const show = () => {
+                step = (step % 3) + 1;
+                flashTrack('Uploading' + '.'.repeat(step), 60000);
+            };
+            show();
+            uploadTimer = setInterval(show, 320);
+        }
+
+        function stopUploading() {
+            clearInterval(uploadTimer);
+            uploadTimer = null;
+            clearTimeout(flashTimer);
+            flashUntil = 0;
+            updateUI();
+        }
+
+        async function addSong(file) {
+            const buffer = await file.arrayBuffer();
+            let parsed;
+            try {
+                parsed = new Midi(buffer);
+            } catch (err) {
+                return ["ERR: INVALID MIDI", 2000];
+            }
+            const existing = playlist.findIndex(item => item.name === file.name && item.size === buffer.byteLength);
+            if (existing !== -1) {
+                currentFileIndex = existing;
+                saveSettings();
+                updateUI();
+                return;
+            }
+            let id;
+            try {
+                id = await dbAdd('songs', { name: file.name, data: buffer, addedAt: Date.now() });
+            } catch (e) {
+                id = -(++tempSongId);
+            }
+            playlist.push({ id, name: file.name, midi: parsed, size: buffer.byteLength });
+            rebuildPlaylist();
+            focusSong(id, false);
+            logHistory('song', file.name, id);
+            updateUI();
+        }
+
+        async function addImage(file) {
+            const valid = await checkImage(file);
+            if (!valid) {
+                return ["ERR: INVALID IMAGE", 2000];
+            }
+            let id = null;
+            try {
+                id = await dbAdd('images', { name: file.name, blob: file, addedAt: Date.now() });
+            } catch (e) {
+                id = null;
+            }
+            backgroundId = id;
+            applyBackground(file);
+            saveSettings();
+            if (id !== null) {
+                logHistory('image', file.name, id);
+                pruneImages();
+            }
+            return ["BG: " + file.name, 1800];
+        }
+
+        midiInput.addEventListener('change', async (e) => {
+            if (!isPowerOn) return;
+            const files = Array.from(e.target.files || []);
+            e.target.value = '';
+            if (!files.length) return;
+
+            const startedAt = performance.now();
+            startUploading();
+            let notice = null;
+            let lastImage = null;
+            try {
+                for (const file of files) {
+                    if (isMidiFile(file)) {
+                        const result = await addSong(file);
+                        if (result) notice = result;
+                    } else if (isImageFile(file)) {
+                        lastImage = file;
+                    } else {
+                        notice = ["ERR: FILE TYPE", 2000];
+                    }
+                }
+                if (lastImage) {
+                    const result = await addImage(lastImage);
+                    if (result) notice = result;
+                }
+                const wait = 1100 - (performance.now() - startedAt);
+                if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
+            } finally {
+                stopUploading();
+            }
+            if (notice) flashTrack(notice[0], notice[1]);
+        });
+
+        function selectSong(index) {
+            queued = false;
+            currentFileIndex = index;
+            saveSettings();
+            const song = playlist[currentFileIndex];
+            logHistory('pilih', song.name, song.id);
+            if (isPlaying) playMIDI();
+            else updateUI();
+        }
+
+        let screenMode = 'normal';
+        const ledScreen = document.getElementById('led-screen');
+        const lcdProws = document.getElementById('lcd-prows');
+        const lcdPthumb = document.getElementById('lcd-pthumb');
+        const lcdPnumVal = document.getElementById('lcd-pnum-val');
+        const lcdPnum = document.getElementById('lcd-pnum');
+        const lcdPnumLabel = document.getElementById('lcd-pnum-label');
+        const plistBar = { mode: 'nomor', timer: null, down: new Set() };
+
+        function renderPnum() {
+            const total = playlist.length;
+            const tempoMode = plistBar.mode === 'tempo';
+            lcdPnum.classList.toggle('tempo', tempoMode);
+            if (tempoMode) {
+                lcdPnumLabel.textContent = 'Tempo:';
+                lcdPnumVal.textContent = String(tempo).padStart(3, '0') + ' BPM';
+            } else {
+                lcdPnumLabel.textContent = 'Nomor:';
+                lcdPnumVal.textContent = total ? `${pad4(currentFileIndex + 1)} / ${pad4(total)}` : '0000 / 0000';
+            }
+        }
+
+        function plistBarReset() {
+            clearTimeout(plistBar.timer);
+            plistBar.down.clear();
+            plistBar.mode = 'nomor';
+            renderPnum();
+        }
+
+        function tempoBarPress(id) {
+            if (!isPowerOn || screenMode !== 'plist') return;
+            clearTimeout(plistBar.timer);
+            plistBar.down.add(id);
+            plistBar.mode = 'tempo';
+            renderPnum();
+        }
+
+        function tempoBarRelease(id) {
+            if (!plistBar.down.delete(id) || plistBar.down.size > 0) return;
+            clearTimeout(plistBar.timer);
+            plistBar.timer = setTimeout(() => {
+                plistBar.timer = setTimeout(() => {
+                    plistBar.mode = 'nomor';
+                    renderPnum();
+                }, 1000);
+            }, 1000);
+        }
+
+        [['minus', btnTempMinus], ['plus', btnTempPlus]].forEach(([id, el]) => {
+            el.addEventListener('pointerdown', () => tempoBarPress(id));
+            ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
+                el.addEventListener(type, () => tempoBarRelease(id));
+            });
+        });
+        const PLIST_ROWS = 7;
+        const PLIST_SLOP = 6;
+        const plist = { rowH: 0, viewH: 0, rows: new Map(), emptyEl: null, seen: -1, init: false, id: null, sy: 0, ly: 0, moved: false, thumbTimer: null };
+        let plistTimer = null;
+
+        function plistMax() {
+            return Math.max(0, playlist.length * plist.rowH - plist.viewH);
+        }
+
+        function plistMeasure() {
+            const height = lcdProws.getBoundingClientRect().height;
+            if (!height) return false;
+            plist.viewH = height;
+            plist.rowH = height / PLIST_ROWS;
+            return true;
+        }
+
+        function plistFillRow(el, index) {
+            const selected = index === currentFileIndex;
+            el.className = selected ? 'lcd-prow sel' : 'lcd-prow';
+            el.textContent = '';
+            if (selected) {
+                const arrow = document.createElement('span');
+                arrow.className = 'arr';
+                arrow.textContent = '->';
+                el.appendChild(arrow);
+            }
+            el.appendChild(document.createTextNode(playlist[index].name.replace(/\.midi?$/i, '')));
+        }
+
+        function plistLayoutRows(y) {
+            if (!plist.rowH) return;
+            const total = playlist.length;
+            const first = Math.max(0, Math.floor(y / plist.rowH));
+            const last = Math.min(total - 1, Math.floor((y + plist.viewH) / plist.rowH));
+            plist.rows.forEach((el, index) => {
+                if (index < first || index > last) {
+                    el.remove();
+                    plist.rows.delete(index);
+                }
+            });
+            for (let i = first; i <= last; i++) {
+                let el = plist.rows.get(i);
+                if (!el) {
+                    el = document.createElement('div');
+                    plistFillRow(el, i);
+                    lcdProws.appendChild(el);
+                    plist.rows.set(i, el);
+                }
+                el.style.transform = `translate3d(0, ${i * plist.rowH - y}px, 0)`;
+            }
+        }
+
+        function plistShowThumb(y) {
+            const content = playlist.length * plist.rowH;
+            if (content <= plist.viewH) {
+                lcdPthumb.classList.remove('show');
+                return;
+            }
+            const thumbHeight = Math.max(8, plist.viewH * plist.viewH / content);
+            const ratio = Math.min(1, Math.max(0, y / (content - plist.viewH)));
+            lcdPthumb.style.height = thumbHeight + 'px';
+            lcdPthumb.style.transform = `translateY(${ratio * (plist.viewH - thumbHeight)}px)`;
+            lcdPthumb.classList.add('show');
+            clearTimeout(plist.thumbTimer);
+            plist.thumbTimer = setTimeout(() => lcdPthumb.classList.remove('show'), 700);
+        }
+
+        const plistScroller = createScroller({
+            max: plistMax,
+            render: (y) => {
+                plistLayoutRows(y);
+                plistShowThumb(y);
+            }
+        });
+
+        function plistReveal(instant) {
+            const top = currentFileIndex * plist.rowH;
+            let target = plistScroller.y;
+            if (top < target) target = top;
+            else if (top + plist.rowH > target + plist.viewH) target = top + plist.rowH - plist.viewH;
+            target = Math.min(plistMax(), Math.max(0, target));
+            if (instant) plistScroller.jump(target);
+            else plistScroller.glide(target);
+        }
+
+        function setScreen(mode) {
+            screenMode = mode;
+            plistBarReset();
+            ledScreen.classList.toggle('mode-plist', mode === 'plist');
+            plistScroller.stop();
+            plist.id = null;
+            if (mode === 'plist') {
+                if (plistMeasure()) {
+                    if (!plist.init) {
+                        plist.init = true;
+                        plistScroller.jump(Math.min(plistMax(), currentFileIndex * plist.rowH));
+                    } else {
+                        plistReveal(true);
+                    }
+                    plist.seen = currentFileIndex;
+                }
+                renderPlaylist();
+            }
+        }
+
+        function renderPlaylist() {
+            const total = playlist.length;
+            renderPnum();
+            if (!plistMeasure()) return;
+            if (total === 0) {
+                plist.rows.forEach(el => el.remove());
+                plist.rows.clear();
+                if (!plist.emptyEl) {
+                    plist.emptyEl = document.createElement('div');
+                    plist.emptyEl.className = 'lcd-pempty';
+                    plist.emptyEl.textContent = 'No Songs Found.';
+                }
+                if (!plist.emptyEl.parentNode) lcdProws.appendChild(plist.emptyEl);
+                plistScroller.jump(0);
+                return;
+            }
+            if (plist.emptyEl && plist.emptyEl.parentNode) plist.emptyEl.remove();
+            plist.rows.forEach((el, index) => {
+                if (index >= total) {
+                    el.remove();
+                    plist.rows.delete(index);
+                } else {
+                    plistFillRow(el, index);
+                }
+            });
+            if (plist.seen !== currentFileIndex) {
+                plist.seen = currentFileIndex;
+                if (!plistScroller.dragging) plistReveal(false);
+            }
+            plistScroller.settle();
+            plistLayoutRows(plistScroller.y);
+        }
+
+        lcdProws.addEventListener('pointerdown', (e) => {
+            if (!isPowerOn || screenMode !== 'plist' || confirmState.open || plist.id !== null) return;
+            if (playlist.length === 0) return;
+            plist.id = e.pointerId;
+            plist.sy = e.clientY;
+            plist.ly = e.clientY;
+            plist.moved = false;
+            try { lcdProws.setPointerCapture(e.pointerId); } catch (err) {}
+            plistScroller.dragStart();
+        });
+
+        lcdProws.addEventListener('pointermove', (e) => {
+            if (e.pointerId !== plist.id) return;
+            if (!plist.moved) {
+                if (Math.abs(e.clientY - plist.sy) < PLIST_SLOP) return;
+                plist.moved = true;
+                plist.ly = e.clientY;
+                return;
+            }
+            plistScroller.dragBy(plist.ly - e.clientY);
+            plist.ly = e.clientY;
+        });
+
+        function plistEnd(e) {
+            if (e.pointerId !== plist.id) return;
+            plist.id = null;
+            if (plist.moved) {
+                plistScroller.dragEnd();
+                return;
+            }
+            plistScroller.dragCancel();
+            if (e.type !== 'pointerup') return;
+            const rect = lcdProws.getBoundingClientRect();
+            const index = Math.floor((plistScroller.y + e.clientY - rect.top) / plist.rowH);
+            if (index >= 0 && index < playlist.length && index !== currentFileIndex) scrollSong(index - currentFileIndex);
+        }
+
+        lcdProws.addEventListener('pointerup', plistEnd);
+        lcdProws.addEventListener('pointercancel', plistEnd);
+        lcdProws.addEventListener('lostpointercapture', plistEnd);
+
+        lcdProws.addEventListener('wheel', (e) => {
+            if (screenMode !== 'plist' || confirmState.open) return;
+            e.preventDefault();
+            plistScroller.nudge(e.deltaY);
+        }, { passive: false });
+
+        window.addEventListener('resize', () => {
+            if (screenMode !== 'plist' || !plist.rowH) return;
+            const rows = plistScroller.y / plist.rowH;
+            if (plistMeasure()) {
+                plistScroller.jump(rows * plist.rowH);
+                renderPlaylist();
+            }
+        });
+
+        function scrollSong(delta) {
+            const total = playlist.length;
+            if (total === 0) return;
+            const restart = screenMode !== 'plist';
+            queued = restart ? false : isPlaying;
+            scrollBusy = true;
+            currentFileIndex = (((currentFileIndex + delta) % total) + total) % total;
+            updateUI();
+            clearTimeout(plistTimer);
+            plistTimer = setTimeout(() => {
+                scrollBusy = false;
+                saveSettings();
+                const song = playlist[currentFileIndex];
+                if (!song) return;
+                logHistory('pilih', song.name, song.id);
+                if (isPlaying && restart) playMIDI();
+                else updateUI();
+            }, 300);
+        }
+
+        const chord = { prev: false, next: false, active: false, timer: null };
+        const hold = { timer: null, fired: false, steps: 0 };
+
+        function holdStop() {
+            clearTimeout(hold.timer);
+            hold.timer = null;
+        }
+
+        function songDelta(which) {
+            const forward = which === 'next';
+            const flip = screenMode === 'plist';
+            return forward !== flip ? 1 : -1;
+        }
+
+        function holdTick(which) {
+            if (!isPowerOn || confirmState.open || chord.active) {
+                holdStop();
+                return;
+            }
+            hold.fired = true;
+            const stride = Math.min(4, 1 + Math.floor(hold.steps / 15));
+            hold.steps++;
+            scrollSong(songDelta(which) * stride);
+            const gap = Math.max(45, 170 - hold.steps * 9);
+            hold.timer = setTimeout(() => holdTick(which), gap);
+        }
+
+        function holdStart(which) {
+            holdStop();
+            hold.fired = false;
+            hold.steps = 0;
+            if (!isPowerOn || playlist.length < 2 || confirmState.open) return;
+            if (chord.active || (chord.prev && chord.next)) return;
+            hold.timer = setTimeout(() => holdTick(which), 380);
+        }
+
+        function chordDown(which) {
+            if (!isPowerOn || confirmState.open) return;
+            chord[which] = true;
+            if (chord.prev && chord.next && !chord.active) {
+                chord.active = true;
+                holdStop();
+                clearTimeout(chord.timer);
+                setScreen(screenMode === 'plist' ? 'normal' : 'plist');
+            }
+        }
+
+        function chordUp(which) {
+            chord[which] = false;
+            if (chord.active && !chord.prev && !chord.next) {
+                clearTimeout(chord.timer);
+                chord.timer = setTimeout(() => { chord.active = false; }, 120);
+            }
+        }
+
+        [['prev', btnPrev], ['next', btnNext]].forEach(([which, el]) => {
+            el.addEventListener('pointerdown', () => {
+                chordDown(which);
+                holdStart(which);
+            });
+            ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
+                el.addEventListener(type, () => {
+                    chordUp(which);
+                    holdStop();
+                });
+            });
+            el.addEventListener('contextmenu', (e) => e.preventDefault());
+        });
+
+        function onSongButton(which) {
+            if (hold.fired) {
+                hold.fired = false;
+                return;
+            }
+            if (chord.active) return;
+            if (!isPowerOn) return;
+            if (confirmState.open) {
+                setConfirmChoice(which === 'prev');
+                return;
+            }
+            if (playlist.length === 0) return;
+            if (screenMode === 'plist') {
+                scrollSong(songDelta(which));
+                return;
+            }
+            selectSong((currentFileIndex + songDelta(which) + playlist.length) % playlist.length);
+        }
+
+        btnPrev.addEventListener('click', () => onSongButton('prev'));
+        btnNext.addEventListener('click', () => onSongButton('next'));
+
+        btnPlay.addEventListener('click', () => {
+            if (!isPowerOn) return;
+            if (playlist.length === 0) {
+                flashTrack("NO MIDI DATA", 1500);
+                return;
+            }
+            const fromList = screenMode === 'plist';
+            if (fromList) setScreen('normal');
+            const song = playlist[currentFileIndex];
+            const switchNow = fromList && playingSong && song !== playingSong;
+            if (isPlaying && !switchNow) {
+                stopMIDI();
+            } else {
+                logHistory('play', song.name, song.id);
+                playMIDI();
+            }
+        });
+
+        let replayTimers = [];
+
+        function playMIDI() {
+            stopMIDI();
+            const song = playlist[currentFileIndex];
+            if (!song) return;
+            let midiData = null;
+            try {
+                midiData = song.midi;
+            } catch (err) {
+                midiData = null;
+            }
+            if (!midiData) {
+                flashTrack("ERR: INVALID MIDI", 2000);
+                return;
+            }
+            tempo = songTempo(song);
+            tempoFor = song;
+            isPlaying = true;
+            playingSong = song;
+            queued = false;
+            btnPlay.classList.add('active-play');
+            updateUI();
+            marqueeStart();
+
+            clearTimeout(barsEnterTimer);
+            enterBars();
+
+            Tone.Transport.PPQ = midiData.header.ppq;
+            Tone.Transport.bpm.value = tempo;
+
+            const groups = new Map();
+            const events = [];
+            let endTick = 0;
+
+            midiData.tracks.forEach(track => {
+                track.notes.forEach(note => {
+                    const targetNote = mapMidiToNote(note.midi);
+                    const index = noteIndex[targetNote];
+                    const duration = Math.max(1, note.durationTicks);
+                    const velocity = note.velocity;
+                    let group = groups.get(note.ticks);
+                    if (!group) {
+                        group = [];
+                        groups.set(note.ticks, group);
+                    }
+                    group.push({ note: targetNote, duration, velocity });
+                    events.push({ tick: note.ticks, index, on: true, velocity });
+                    events.push({ tick: note.ticks + duration, index, on: false, velocity: 0 });
+                    if (note.ticks + duration > endTick) endTick = note.ticks + duration;
+                });
+            });
+
+            events.sort((a, b) => (a.tick - b.tick) || (a.on === b.on ? 0 : (a.on ? 1 : -1)));
+
+            const startTime = Tone.now() + 0.05;
+            timeline.events = events;
+            timeline.pointer = 0;
+            timeline.endTick = endTick;
+            timeline.doneAt = 0;
+            timeline.startTime = startTime;
+
+            groups.forEach((group, tick) => {
+                Tone.Transport.schedule((time) => {
+                    const active = synth;
+                    if (!active) return;
+                    for (let i = 0; i < group.length; i++) {
+                        const item = group[i];
+                        try {
+                            active.triggerAttackRelease(item.note, item.duration + "i", time, item.velocity);
+                        } catch (err) {}
+                    }
+                }, tick + "i");
+            });
+
+            Tone.Transport.start(startTime);
+            ensureBarsLoop();
+            dmEnsureLoop();
+        }
+
+        function stopMIDI() {
+            const wasPlaying = isPlaying;
+            isPlaying = false;
+            playingSong = null;
+            queued = false;
+            btnPlay.classList.remove('active-play');
+            clearTimeout(barsEnterTimer);
+            replayTimers.forEach(clearTimeout);
+            replayTimers = [];
+            timeline.events = [];
+            timeline.pointer = 0;
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
+            if (synth) synth.releaseAll();
+            barHolds.fill(0);
+            keyGroups.forEach(group => group.forEach(el => el.classList.remove('pressed')));
+            if (wasPlaying) marqueeStop();
+            updateUI();
+        }
+
+        async function replayTake(id) {
+            let record = null;
+            try {
+                record = await dbGet('takes', id);
+            } catch (e) {
+                record = null;
+            }
+            if (!record) {
+                panelNotice('Rekaman tidak ditemukan.');
+                return;
+            }
+            stopMIDI();
+            let end = 0;
+            record.events.forEach(event => {
+                replayTimers.push(setTimeout(() => {
+                    synth.triggerAttackRelease(event.note, event.d / 1000, Tone.immediate());
+                    triggerVisualPress(event.note);
+                    barNoteOn(barIndexOf(event.note), 0.85);
+                }, event.t));
+                replayTimers.push(setTimeout(() => {
+                    triggerVisualRelease(event.note);
+                    barNoteOff(barIndexOf(event.note));
+                }, event.t + event.d));
+                end = Math.max(end, event.t + event.d);
+            });
+            flashTrack(`REPLAY ${record.events.length} NADA`, end + 400);
+            panelNotice('Memutar rekaman.');
+        }
+
+        const historyList = document.getElementById('history-list');
+        const historyNotice = document.getElementById('history-notice');
+        let noticeTimer = null;
+
+        const typeTags = { song: 'LAGU', image: 'GAMBAR', take: 'REKAM', tempo: 'TEMPO', mode: 'SUARA', play: 'PLAY', pilih: 'PILIH', power: 'PWR' };
+        const actionLabels = { song: 'PILIH', pilih: 'PILIH', image: 'PAKAI', take: 'PUTAR', tempo: 'PAKAI' };
+
+        function panelNotice(text) {
+            historyNotice.textContent = text;
+            clearTimeout(noticeTimer);
+            noticeTimer = setTimeout(() => { historyNotice.textContent = ''; }, 2400);
+        }
+
+        function formatTime(at) {
+            return new Date(at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        }
+
+        async function renderHistory() {
+            let items = [];
+            try {
+                items = await dbAll('history');
+            } catch (e) {
+                items = [];
+            }
+            items.sort((a, b) => b.id - a.id);
+            historyList.textContent = '';
+
+            if (!items.length) {
+                const empty = document.createElement('div');
+                empty.className = 'history-empty';
+                empty.textContent = 'Belum ada riwayat.';
+                historyList.appendChild(empty);
+                return;
+            }
+
+            items.slice(0, 150).forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'history-item';
+
+                const tag = document.createElement('span');
+                tag.className = 'history-tag t-' + item.type;
+                tag.textContent = typeTags[item.type] || String(item.type).toUpperCase();
+
+                const main = document.createElement('div');
+                main.className = 'history-main';
+                const label = document.createElement('div');
+                label.className = 'history-label';
+                label.textContent = item.label;
+                const time = document.createElement('div');
+                time.className = 'history-time';
+                time.textContent = formatTime(item.at);
+                main.appendChild(label);
+                main.appendChild(time);
+
+                row.appendChild(tag);
+                row.appendChild(main);
+
+                if (actionLabels[item.type]) {
+                    const button = document.createElement('button');
+                    button.className = 'h-btn';
+                    button.type = 'button';
+                    button.textContent = actionLabels[item.type];
+                    button.addEventListener('click', () => runHistoryAction(item));
+                    row.appendChild(button);
+                }
+
+                historyList.appendChild(row);
+            });
+        }
+
+        async function runHistoryAction(item) {
+            if (item.type === 'song' || item.type === 'pilih') {
+                const index = playlist.findIndex(song => song.id === item.ref);
+                if (index === -1) {
+                    panelNotice('Lagu sudah dihapus.');
+                    return;
+                }
+                currentFileIndex = index;
+                saveSettings();
+                if (isPowerOn && isPlaying) playMIDI();
+                else updateUI();
+                panelNotice('Lagu dipilih.');
+            } else if (item.type === 'image') {
+                if (item.ref === null) {
+                    backgroundId = null;
+                    applyBackground(null);
+                    saveSettings();
+                    panelNotice('Background bawaan dipakai.');
+                    return;
+                }
+                let record = null;
+                try {
+                    record = await dbGet('images', item.ref);
+                } catch (e) {
+                    record = null;
+                }
+                if (!record) {
+                    panelNotice('Gambar sudah dihapus.');
+                    return;
+                }
+                backgroundId = record.id;
+                applyBackground(record.blob);
+                saveSettings();
+                logHistory('image', record.name, record.id);
+                panelNotice('Background dipakai.');
+            } else if (item.type === 'tempo') {
+                tempo = item.ref;
+                Tone.Transport.bpm.value = tempo;
+                saveSettings();
+                updateUI();
+                panelNotice('Tempo diterapkan.');
+            } else if (item.type === 'take') {
+                if (!isPowerOn) {
+                    panelNotice('Nyalakan PWR dulu.');
+                    return;
+                }
+                replayTake(item.ref);
+            }
+        }
+
+        function openHistory() {
+            document.body.classList.add('history-open');
+            renderHistory();
+        }
+
+        function closeHistory() {
+            document.body.classList.remove('history-open');
+        }
+
+        lcdTrack.addEventListener('click', openHistory);
+        document.getElementById('history-close').addEventListener('click', closeHistory);
+        document.getElementById('history-backdrop').addEventListener('click', closeHistory);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeHistory();
+        });
+
+        document.getElementById('hist-default-bg').addEventListener('click', () => {
+            backgroundId = null;
+            applyBackground(null);
+            saveSettings();
+            logHistory('image', 'Background bawaan', null);
+            panelNotice('Background bawaan dipakai.');
+        });
+
+        document.getElementById('hist-clear-songs').addEventListener('click', () => {
+            stopMIDI();
+            playlist = playlist.filter(song => song.cloud);
+            currentFileIndex = 0;
+            dbClear('songs').catch(() => {});
+            saveSettings();
+            updateUI();
+            panelNotice('Semua lagu dihapus.');
+        });
+
+        document.getElementById('hist-clear').addEventListener('click', () => {
+            dbClear('history').then(renderHistory).catch(() => {});
+        });
+
+        const logoImg = document.getElementById('logo-img');
+        const logoFrame = document.querySelector('.logo-frame');
+        const logoSource = logoImg.getAttribute('src');
+        let logoAttempts = 0;
+
+        function logoReady() {
+            logoFrame.classList.add('ready');
+        }
+
+        logoImg.addEventListener('load', logoReady);
+        logoImg.addEventListener('error', () => {
+            if (logoAttempts >= 6) return;
+            logoAttempts++;
+            setTimeout(() => {
+                logoImg.src = `${logoSource}?retry=${logoAttempts}`;
+            }, 1200 * logoAttempts);
+        });
+
+        if (logoImg.complete && logoImg.naturalWidth > 0) logoReady();
+        setTimeout(logoReady, 2500);
+
+        const FB_CONFIG = {
+            apiKey: "AIzaSyDpRllLIJ346sw9FNM0KF7H1B_HAftAIkI",
+            authDomain: "ryzmusical.firebaseapp.com",
+            projectId: "ryzmusical",
+            storageBucket: "ryzmusical.firebasestorage.app",
+            messagingSenderId: "934193972979",
+            appId: "1:934193972979:web:a31ffe822e7d2e9fd8d986",
+            measurementId: "G-80WXWJD34L"
+        };
+        const FB_COLLECTION = 'midi_songs';
+        const cloudSongs = new Map();
+        const hiddenCloud = new Set();
+
+        function saveHiddenCloud() {
+            dbPut('kv', { key: 'hiddenCloud', ids: Array.from(hiddenCloud) }).catch(() => {});
+        }
+
+        function songNumber(song) {
+            const m = /^\s*(\d{5})\s*-/.exec(song.name);
+            return m ? parseInt(m[1], 10) : Infinity;
+        }
+
+        let wantedTrackId = null;
+        let dbSynced = false;
+
+        function focusSong(id, announce) {
+            const index = playlist.findIndex(song => song.id === id);
+            if (index === -1) return;
+            currentFileIndex = index;
+            queued = isPlaying;
+            saveSettings();
+            if (announce && isPowerOn) {
+                flashTrack('BARU: ' + playlist[index].name.replace(/\.midi?$/i, ''), 1800);
+            }
+        }
+
+        function base64ToBuffer(b64) {
+            const binary = atob(b64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes.buffer;
+        }
+
+        function makeCloudSong(docId, data, addedAt) {
+            const b64 = data.data;
+            const pad = b64.endsWith('==') ? 2 : (b64.endsWith('=') ? 1 : 0);
+            const song = {
+                id: 'c:' + docId,
+                name: data.name || 'Tanpa Judul',
+                size: Math.floor(b64.length * 3 / 4) - pad,
+                cloud: true,
+                addedAt
+            };
+            let parsed = null;
+            Object.defineProperty(song, 'midi', {
+                enumerable: true,
+                get() {
+                    if (!parsed) parsed = new Midi(base64ToBuffer(b64));
+                    return parsed;
+                }
+            });
+            return song;
+        }
+
+        function rebuildPlaylist() {
+            const currentId = playlist[currentFileIndex] ? playlist[currentFileIndex].id : null;
+            const cloud = Array.from(cloudSongs.values()).filter(song => !hiddenCloud.has(song.id));
+            const local = playlist.filter(song => !song.cloud);
+            const all = cloud.concat(local);
+            all.forEach((song, order) => { song._order = order; });
+            all.sort((a, b) => {
+                const na = songNumber(a);
+                const nb = songNumber(b);
+                if (na !== nb) return na < nb ? -1 : 1;
+                if (na === Infinity) {
+                    if (!!a.cloud !== !!b.cloud) return a.cloud ? -1 : 1;
+                    if (a.cloud) return a.name.localeCompare(b.name, undefined, { numeric: true });
+                    return a._order - b._order;
+                }
+                return a.name.localeCompare(b.name, undefined, { numeric: true })
+                    || ((a.addedAt || 0) - (b.addedAt || 0))
+                    || (a._order - b._order);
+            });
+            playlist = all;
+
+            let index = -1;
+            if (wantedTrackId !== null) {
+                index = playlist.findIndex(song => song.id === wantedTrackId);
+                if (index !== -1) wantedTrackId = null;
+            }
+            if (index === -1 && currentId !== null) index = playlist.findIndex(song => song.id === currentId);
+            if (index === -1) index = Math.min(currentFileIndex, Math.max(0, playlist.length - 1));
+            currentFileIndex = index;
+        }
+
+        function connectDatabase() {
+            if (typeof firebase === 'undefined') return;
+            try {
+                const app = firebase.initializeApp(FB_CONFIG);
+                const fs = firebase.firestore(app);
+                fs.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+                fs.collection(FB_COLLECTION).onSnapshot(snapshot => {
+                    const fromServer = !(snapshot.metadata && snapshot.metadata.fromCache);
+                    const initial = !dbSynced;
+                    if (fromServer) dbSynced = true;
+                    let changed = false;
+                    let newestKey = null;
+                    snapshot.docChanges().forEach(change => {
+                        const doc = change.doc;
+                        const key = doc.id;
+                        if (change.type === 'removed') {
+                            if (cloudSongs.delete(key)) changed = true;
+                            return;
+                        }
+                        const data = doc.data();
+                        const name = String(data.name || key);
+                        const type = String(data.type || '').toLowerCase();
+                        const isAudio = type === 'audio' || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(name);
+                        const isMidi = type === 'midi' || type === 'mid' || /\.(mid|midi)$/i.test(name) || (!type && !isAudio);
+                        let raw = typeof data.data === 'string' ? data.data : '';
+                        raw = raw.replace(/^data:[^,]*,/, '');
+                        if (/\s/.test(raw)) raw = raw.replace(/\s+/g, '');
+                        if (!isMidi || isAudio || !raw) {
+                            if (cloudSongs.delete(key)) changed = true;
+                            return;
+                        }
+                        const addedAt = data.addedAt && data.addedAt.toMillis ? data.addedAt.toMillis() : 0;
+                        cloudSongs.set(key, makeCloudSong(key, { name, data: raw }, addedAt));
+                        changed = true;
+                        if (!initial && change.type === 'added') newestKey = key;
+                    });
+                    if (changed) {
+                        rebuildPlaylist();
+                        if (newestKey) focusSong('c:' + newestKey, true);
+                        updateUI();
+                    }
+                }, () => {});
+            } catch (err) {}
+        }
+
+        connectDatabase();
+
+        async function restoreState() {
+            try {
+                await openDb();
+            } catch (e) {
+                return;
+            }
+
+            const settings = await dbGet('kv', 'settings').catch(() => null);
+            let savedTrackId = null;
+            if (settings) {
+                if (Number.isFinite(settings.tempo)) {
+                    tempo = Math.min(300, Math.max(40, Math.round(settings.tempo / 5) * 5));
+                }
+                backgroundId = settings.backgroundId === undefined ? null : settings.backgroundId;
+                savedTrackId = settings.trackId === undefined ? null : settings.trackId;
+            }
+
+            const hidden = await dbGet('kv', 'hiddenCloud').catch(() => null);
+            if (hidden && Array.isArray(hidden.ids)) hidden.ids.forEach(id => hiddenCloud.add(id));
+
+            const songs = await dbAll('songs').catch(() => []);
+            songs.forEach(record => {
+                try {
+                    playlist.push({ id: record.id, name: record.name, midi: new Midi(record.data), size: record.data.byteLength });
+                } catch (err) {
+                    dbDelete('songs', record.id).catch(() => {});
+                }
+            });
+            wantedTrackId = savedTrackId;
+            rebuildPlaylist();
+
+            if (backgroundId !== null) {
+                const image = await dbGet('images', backgroundId).catch(() => null);
+                if (image) applyBackground(image.blob);
+                else backgroundId = null;
+            }
+
+            if (isPowerOn) Tone.Transport.bpm.value = tempo;
+            updateUI();
+
+            if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+        }
+
+        document.addEventListener('touchmove', (e) => {
+            if (e.target.closest && e.target.closest('.history-panel')) return;
+            if (e.cancelable) e.preventDefault();
+        }, { passive: false });
+        document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+        startRadioWatch();
+        restoreState();
+</script>
+</body>
+</html>
