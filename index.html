@@ -199,7 +199,7 @@
 
         .lcd-ind {
             position: absolute;
-            left: calc(25.5 * var(--p)); top: 50%;
+            left: calc(16 * var(--p)); top: 50%;
             width: calc(15 * var(--p)); height: calc(15 * var(--p));
             margin-top: calc(-7.5 * var(--p));
             background: #ee4a27;
@@ -212,7 +212,7 @@
 
         .lcd-time {
             position: absolute;
-            left: calc(49 * var(--p)); top: 0;
+            left: calc(38 * var(--p)); top: 0;
             font-size: calc(29 * var(--p));
             font-weight: 600;
             line-height: calc(28.5 * var(--p));
@@ -1411,7 +1411,7 @@
             <div class="knob-label">REMOVE</div>
         </div>
         <div class="knob-wrapper" id="kw-upload">
-            <input type="file" id="midiInput" accept=".mid,.midi,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif" style="display: none;" multiple>
+            <input type="file" id="midiInput" accept=".mid,.midi,audio/midi,audio/mid,audio/x-midi,audio/x-mid,application/x-midi,audio/*,application/octet-stream,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif" style="display: none;" multiple>
             <div class="knob sys-ctrl disabled" id="btn-upload"></div>
             <div class="knob-label">UPLOAD</div>
         </div>
@@ -4210,8 +4210,8 @@
         }
 
         function songNumber(song) {
-            const m = /^\s*(\d{5})\s*-/.exec(song.name);
-            return m ? parseInt(m[1], 10) : Infinity;
+            const m = /^\W*(\d{5})(?!\d)/.exec(song.name);
+            return m ? parseInt(m[1], 10) : -Infinity;
         }
 
         let wantedTrackId = null;
@@ -4266,7 +4266,7 @@
                 const na = songNumber(a);
                 const nb = songNumber(b);
                 if (na !== nb) return na < nb ? -1 : 1;
-                if (na === Infinity) {
+                if (na === -Infinity) {
                     if (!!a.cloud !== !!b.cloud) return a.cloud ? -1 : 1;
                     if (a.cloud) return a.name.localeCompare(b.name, undefined, { numeric: true });
                     return a._order - b._order;
